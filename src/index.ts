@@ -13,3 +13,5 @@ export {
   type HttpLogOptions,
   type HttpRequestInfo,
 } from "./http";
+export { createFetch, type FetchLogOptions } from "./fetch";
+export { runJob, type JobInfo } from "./job";
