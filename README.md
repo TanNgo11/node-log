@@ -47,9 +47,30 @@ Every level (`trace`, `debug`, `info`, `warn`, `error`, `fatal`) takes `(message
 `createLogger(options)` accepts:
 - `level`, `format`;
 - `base`: fields added to every line;
-- `redactKeys`: extra sensitive keys;
+- `redactKeys`, `redactValues`, `redact`: custom redaction (see below);
 - `snakeCase`: default `true`;
 - `write`: replaces stdout, for tests.
+
+### Custom redaction
+
+```ts
+import { createLogger, REDACT_PATTERNS } from "@tanngo11/log";
+
+export const log = createLogger({
+  // extra key names, or RegExp tested on the snake_case key
+  redactKeys: ["tax_code", /^national_id/],
+  // value patterns masked in every string, including messages
+  redactValues: [REDACT_PATTERNS.phoneVN, REDACT_PATTERNS.paymentCard],
+  // last step for each field; return undefined to drop the field
+  redact: (key, value) => (key === "customer_name" && typeof value === "string" ? `${value[0]}***` : value),
+});
+```
+
+- `REDACT_PATTERNS` currently contains `phoneVN`, `paymentCard` and `ipv4`.
+- These patterns are opt-in because they can match ordinary numbers. `paymentCard` does not
+  match 13-digit millisecond timestamps.
+- The `redact` hook never receives `level`, `message` or `event`.
+- If the hook throws, that line becomes a `log.serialize_failed` line instead.
 
 ### Context
 
@@ -147,17 +168,25 @@ const app = Fastify({ logger: false });
 await app.register(fastifyLogger, { log });
 ```
 
-## NestJS (Express adapter)
+## NestJS (Express or Fastify adapter)
 
 ```ts
-import { ErrorRecorderInterceptor, NestLogger, requestLogger } from "@tanngo11/log/nest";
+import { NestLogger, setupNestLogging } from "@tanngo11/log/nest";
 
 const app = await NestFactory.create(AppModule, { logger: new NestLogger(log) });
-app.use(requestLogger(log));
-app.useGlobalInterceptors(new ErrorRecorderInterceptor());
+// or: NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), { logger: new NestLogger(log) })
+await setupNestLogging(app, log); // before app.listen()
 ```
 
-Nest's own logs become JSON with `nest_context`. Unhandled exceptions are written once, on the
+`setupNestLogging` detects the adapter:
+- Express gets the `requestLogger` middleware.
+- Fastify gets the `fastifyLogger` plugin.
+
+Both get `ErrorRecorderInterceptor`. For manual setup, `requestLogger`, `fastifyLogger` and
+`ErrorRecorderInterceptor` are exported too.
+
+Nest's own logs become JSON with `nest_context`. Extra arguments are kept: objects become fields,
+other values go to `nest_args`. Unhandled exceptions are written once, on the
 `http.request` line, not again by Nest's `ExceptionsHandler`. Requires `rxjs` (already a Nest
 dependency).
 
@@ -226,6 +255,21 @@ new Worker("invoices", loggedProcessor(log, "send_invoice_email", async (job) =>
   attempts fail at `warn`.
 - When enqueueing from a request, use `queue.add(name, jobData(data))`. The job's logs then carry
   that request's `request_id`.
+
+## Prisma (5 and 6)
+
+```ts
+import { prismaLogging } from "@tanngo11/log/prisma";
+
+export const prisma = new PrismaClient().$extends(prismaLogging(log, { db_system: "postgres" }));
+```
+
+- Logs `db.slow_query` (`warn`) for queries that take 500 ms or more (`slowMs`). Fields:
+  `db_table` (the model), `db_operation` (`findMany`, `$queryRaw`...), `db_rows`, `duration_ms`.
+- Never logs SQL text or query arguments.
+- Failed queries are not logged by default. The error already reaches the request's
+  `http.request` line with `err_code` (`P2002`...), and the contract logs each error once. Pass
+  `logErrors: true` to also get a `db.error` line.
 
 ## Migrating from the shared winston logger
 

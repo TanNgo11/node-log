@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0
+
+Added:
+- `@tanngo11/log/prisma`: `prismaLogging(log)` Prisma Client extension (Prisma 5 and 6). Logs
+  `db.slow_query` with model, operation, rows and duration, and optionally `db.error`. It never
+  logs SQL or arguments. Tested against a real Prisma client on SQLite.
+- Custom redaction: `redactKeys` accepts RegExp, `redactValues` masks value patterns in every
+  string, and the `redact(key, value)` hook can replace or drop fields. Opt-in
+  `REDACT_PATTERNS`: `phoneVN`, `paymentCard`, `ipv4`.
+- NestJS on the Fastify adapter. `setupNestLogging(app, log)` configures either adapter in one
+  call.
+
 ## 0.2.0
 
 Breaking:

@@ -1,6 +1,6 @@
 {
   "name": "@tanngo11/log",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Structured JSON logging for Node services, implementing log contract v1",
   "license": "MIT",
   "repository": {
