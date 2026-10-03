@@ -11,44 +11,51 @@ export function logStartup(log: Logger, fields: Fields = {}): void {
   });
 }
 
+/** Call at the start of your own shutdown handler (e.g. on SIGTERM). The library never handles signals. */
+export function logShutdown(log: Logger, fields: Fields = {}): void {
+  log.info("app stopping", { event: "app.stopping", ...fields });
+}
+
 export interface ProcessHandlerOptions {
   /** Exit with code 1 after an uncaught error. Next.js keeps serving, so its adapter passes false. */
   exitOnCrash?: boolean;
+  /** Time other crash handlers (Sentry, APM) get to flush before exit. Default 1000 ms. */
+  exitDelayMs?: number;
   exit?: (code: number) => void;
 }
 
 export function crashHandlers(log: Logger, opts: ProcessHandlerOptions = {}) {
   const exitOnCrash = opts.exitOnCrash ?? true;
+  const exitDelayMs = opts.exitDelayMs ?? 1000;
   const exit = opts.exit ?? ((code: number) => process.exit(code));
+  let exiting = false;
   const crash = (source: string, err: unknown) => {
-    if (exitOnCrash) {
-      log.fatal("app crashed", { event: "app.crashed", crash_source: source, err });
-      exit(1);
-    } else {
+    if (!exitOnCrash) {
       log.error("unhandled error", { event: "app.unhandled_error", crash_source: source, err });
+      return;
     }
+    log.fatal("app crashed", { event: "app.crashed", crash_source: source, err });
+    if (exiting) return;
+    exiting = true;
+    if (typeof process !== "undefined") process.exitCode = 1;
+    // Deferred so listeners registered after ours still run; unref so a process with nothing
+    // left to do exits on its own (with exitCode 1) without waiting.
+    const timer = setTimeout(() => exit(1), exitDelayMs);
+    (timer as { unref?: () => void }).unref?.();
   };
   return {
     onUncaught: (err: unknown) => crash("uncaughtException", err),
     onRejection: (reason: unknown) => crash("unhandledRejection", reason),
-    onSignal: (signal: NodeJS.Signals) => log.info("app stopping", { event: "app.stopping", signal }),
   };
 }
 
 const state = globalSingleton("process", () => ({ installed: false }));
 
+/** Logs uncaught exceptions and unhandled rejections. Does not touch SIGTERM/SIGINT. */
 export function installProcessHandlers(log: Logger, opts: ProcessHandlerOptions = {}): void {
   if (state.installed || typeof process === "undefined" || typeof process.on !== "function") return;
   state.installed = true;
   const h = crashHandlers(log, opts);
   process.on("uncaughtException", h.onUncaught);
   process.on("unhandledRejection", h.onRejection);
-  for (const signal of ["SIGTERM", "SIGINT"] as const) {
-    process.once(signal, () => {
-      h.onSignal(signal);
-      // A listener disables Node's default "terminate on signal". If nobody else handles
-      // the signal, re-raise it now that ours is removed so the process still stops.
-      if (process.listenerCount(signal) === 0) process.kill(process.pid, signal);
-    });
-  }
 }

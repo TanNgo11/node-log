@@ -15,4 +15,4 @@ export {
 } from "./http";
 export { createFetch, type FetchLogOptions } from "./fetch";
 export { runJob, type JobInfo } from "./job";
-export { installProcessHandlers, logStartup, type ProcessHandlerOptions } from "./process";
+export { installProcessHandlers, logShutdown, logStartup, type ProcessHandlerOptions } from "./process";
