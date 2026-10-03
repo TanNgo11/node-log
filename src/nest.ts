@@ -1,11 +1,15 @@
 import type { CallHandler, ExecutionContext, LoggerService, NestInterceptor } from "@nestjs/common";
 import { catchError, throwError, type Observable } from "rxjs";
 import { currentStore, recordError, recordErrorIn, storeOf } from "./context";
+import { requestLogger as expressRequestLogger } from "./express";
+import { fastifyLogger } from "./fastify";
+import type { HttpLogOptions } from "./http";
 import type { Level } from "./levels";
 import type { Logger } from "./logger";
 import type { Fields } from "./normalize";
 
 export { requestLogger } from "./express";
+export { fastifyLogger } from "./fastify";
 
 const STACK_RE = /\n\s+at /;
 
@@ -85,4 +89,29 @@ export class ErrorRecorderInterceptor implements NestInterceptor {
       }),
     );
   }
+}
+
+
+/** The parts of a Nest application that setupNestLogging needs, for either HTTP adapter. */
+export interface NestAppLike {
+  getHttpAdapter(): { getType(): string };
+  useGlobalInterceptors(...interceptors: NestInterceptor[]): unknown;
+  use?(...args: unknown[]): unknown;
+  register?(...args: unknown[]): Promise<unknown>;
+}
+
+/**
+ * One-call setup for Express and Fastify Nest apps: request context, the http.request line and
+ * error recording. Call before `app.listen()`.
+ */
+export async function setupNestLogging(app: NestAppLike, log: Logger, opts: HttpLogOptions = {}): Promise<void> {
+  const type = app.getHttpAdapter().getType();
+  if (type === "fastify") {
+    if (!app.register) throw new Error("setupNestLogging: Fastify app has no register()");
+    await app.register(fastifyLogger, { ...opts, log });
+  } else {
+    if (!app.use) throw new Error("setupNestLogging: app has no use()");
+    app.use(expressRequestLogger(log, opts));
+  }
+  app.useGlobalInterceptors(new ErrorRecorderInterceptor());
 }
