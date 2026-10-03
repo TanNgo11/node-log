@@ -16,6 +16,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
+      - run: npx prisma generate --schema test/prisma/schema.prisma
       - run: npm run typecheck
       - run: npm test
       - run: npm run build

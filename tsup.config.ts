@@ -9,6 +9,7 @@ export default defineConfig({
     next: "src/next.ts",
     "next-edge": "src/next-edge.ts",
     bullmq: "src/bullmq.ts",
+    prisma: "src/prisma.ts",
   },
   format: ["esm", "cjs"],
   dts: true,

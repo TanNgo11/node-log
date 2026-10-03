@@ -1,0 +1,16 @@
+// Test-only schema for the Prisma extension integration test.
+generator client {
+  provider = "prisma-client-js"
+  output   = "./client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./test.db"
+}
+
+model Order {
+  id    Int    @id @default(autoincrement())
+  code  String @unique
+  total Int
+}
