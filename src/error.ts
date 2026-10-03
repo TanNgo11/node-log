@@ -1,5 +1,5 @@
 import { globalSingleton } from "./global";
-import { redactingJson } from "./redact";
+import { defaultRedactor } from "./redact";
 
 export interface ErrFields {
   err_type?: string;
@@ -30,7 +30,7 @@ function errorType(e: Error): string {
 export function serializeError(err: unknown): ErrFields {
   if (!isErrorLike(err)) {
     if (typeof err === "string") return { err_type: "string", err_message: err };
-    return { err_type: typeof err, err_message: redactingJson(err) };
+    return { err_type: typeof err, err_message: defaultRedactor.json(err) };
   }
   const e = err as Error & { code?: unknown; cause?: unknown };
   const out: ErrFields = { err_type: errorType(e), err_message: String(e.message ?? "") };
@@ -44,7 +44,7 @@ export function serializeError(err: unknown): ErrFields {
       causes.push(`${errorType(cause)}: ${cause.message}`);
       cause = (cause as { cause?: unknown }).cause;
     } else {
-      causes.push(redactingJson(cause));
+      causes.push(defaultRedactor.json(cause));
       cause = undefined;
     }
   }

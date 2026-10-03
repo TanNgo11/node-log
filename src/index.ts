@@ -1,6 +1,7 @@
 export { createLogger, type Logger, type LoggerOptions } from "./logger";
 export { LEVELS, type Level } from "./levels";
-export type { Fields } from "./normalize";
+export type { Fields, RedactHook } from "./normalize";
+export { REDACT_PATTERNS, type KeyPattern } from "./redact";
 export { serializeError } from "./error";
 export { addContext, getContext, recordError, withContext } from "./context";
 export {

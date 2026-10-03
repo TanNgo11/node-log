@@ -1,7 +1,7 @@
 import { isErrorLike } from "./error";
 import type { Level } from "./levels";
 import type { Logger } from "./logger";
-import { redactingJson } from "./redact";
+import { defaultRedactor } from "./redact";
 
 const METHODS = { log: "info", info: "info", warn: "warn", error: "error", debug: "debug", trace: "debug" } as const;
 type Method = keyof typeof METHODS;
@@ -33,7 +33,7 @@ export function patchConsole(log: Logger): () => void {
             err ??= arg;
             parts.push(arg.message);
           } else {
-            parts.push(typeof arg === "string" ? arg : redactingJson(arg));
+            parts.push(typeof arg === "string" ? arg : defaultRedactor.json(arg));
           }
         }
         log[level](parts.join(" "), { event: "console", console_method: method, err });

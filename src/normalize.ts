@@ -1,8 +1,11 @@
 import { isErrorLike, serializeError } from "./error";
 import type { Level } from "./levels";
-import { isSensitiveKey, REDACTED, redactingJson, scrubValue, toSnakeCase } from "./redact";
+import { REDACTED, toSnakeCase, type Redactor } from "./redact";
 
 export { DEFAULT_REDACT_KEYS, toSnakeCase } from "./redact";
+
+/** Final per-field hook: return a replacement, or undefined to drop the field. */
+export type RedactHook = (key: string, value: Primitive) => unknown;
 
 export type Fields = Record<string, unknown>;
 export type Primitive = string | number | boolean | null;
@@ -10,8 +13,12 @@ export type LogRecord = Record<string, Primitive>;
 
 export interface NormalizeOptions {
   snakeCase: boolean;
-  redactKeys: string[];
+  redactor: Redactor;
+  hook?: RedactHook;
 }
+
+// Fields the redact hook never sees, so every line keeps its level, message and event.
+const HOOK_EXEMPT = new Set(["level", "message", "event"]);
 
 // Keys owned by Vector (overwritten or deleted on ingest) or by the logger itself.
 export const RESERVED_KEYS = new Set([
@@ -56,7 +63,7 @@ function flattenInto(out: LogRecord, prefix: string, obj: Fields, depth: number,
     const key = opts.snakeCase ? toSnakeCase(rawKey) : rawKey;
     const full = prefix ? `${prefix}_${key}` : key;
     if (value === undefined || typeof value === "function" || typeof value === "symbol") continue;
-    if (value !== null && (isSensitiveKey(rawKey, opts.redactKeys) || isSensitiveKey(full, opts.redactKeys))) {
+    if (value !== null && (opts.redactor.isSensitive(rawKey) || opts.redactor.isSensitive(full))) {
       out[full] = REDACTED;
       continue;
     }
@@ -74,14 +81,14 @@ function flattenInto(out: LogRecord, prefix: string, obj: Fields, depth: number,
       flattenInto(out, full, value, depth + 1, opts);
     } else {
       // Arrays, deep objects, class instances: stringified with sensitive keys redacted.
-      out[full] = redactingJson(value, opts.redactKeys);
+      out[full] = opts.redactor.json(value);
     }
   }
 }
 
-function finalize(key: string, value: Primitive): Primitive {
+function finalize(key: string, value: Primitive, opts: NormalizeOptions): Primitive {
   if (typeof value !== "string") return value;
-  const v = scrubValue(isUrlKey(key) ? stripUrl(value) : value);
+  const v = opts.redactor.scrub(isUrlKey(key) ? stripUrl(value) : value);
   return truncate(v, key === "err_stack" ? MAX_STACK : MAX_STRING);
 }
 
@@ -107,11 +114,17 @@ export function buildRecord(
   flattenInto(flat, "", merged, 0, opts);
   if (err !== undefined) Object.assign(flat, serializeError(err));
 
-  const text = typeof message === "string" ? message : redactingJson(message, opts.redactKeys);
-  const out: LogRecord = { level, message: truncate(scrubValue(text), MAX_MESSAGE) };
+  const text = typeof message === "string" ? message : opts.redactor.json(message);
+  const out: LogRecord = { level, message: truncate(opts.redactor.scrub(text), MAX_MESSAGE) };
   for (const [k, v] of Object.entries(flat)) {
     const key = RESERVED_KEYS.has(k) ? `app_${k}` : k;
-    out[key] = finalize(key, v);
+    let value = finalize(key, v, opts);
+    if (opts.hook && !HOOK_EXEMPT.has(key)) {
+      const replaced = opts.hook(key, value);
+      if (replaced === undefined) continue;
+      value = typeof replaced === "object" && replaced !== null ? opts.redactor.json(replaced) : (replaced as Primitive);
+    }
+    out[key] = value;
   }
   return out;
 }

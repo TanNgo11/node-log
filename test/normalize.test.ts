@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   buildRecord,
-  DEFAULT_REDACT_KEYS,
   serializeRecord,
   stripUrl,
   toSnakeCase,
   type NormalizeOptions,
 } from "../src/normalize";
+import { createRedactor } from "../src/redact";
 
-const opts: NormalizeOptions = { snakeCase: true, redactKeys: DEFAULT_REDACT_KEYS };
+const opts: NormalizeOptions = { snakeCase: true, redactor: createRedactor() };
 const rec = (fields: Record<string, unknown>, message: unknown = "m") =>
   buildRecord("info", message, [fields], opts);
 

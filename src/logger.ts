@@ -2,13 +2,13 @@ import { getContext } from "./context";
 import { LEVEL_RANK, parseLevel, type Level } from "./levels";
 import {
   buildRecord,
-  DEFAULT_REDACT_KEYS,
   serializeRecord,
-  toSnakeCase,
   type Fields,
   type NormalizeOptions,
+  type RedactHook,
 } from "./normalize";
 import { formatPretty } from "./pretty";
+import { createRedactor, type KeyPattern } from "./redact";
 
 type LogMethod = (message: string, fields?: Fields) => void;
 
@@ -28,7 +28,12 @@ export interface LoggerOptions {
   level?: Level | string;
   format?: "json" | "pretty";
   base?: Fields;
-  redactKeys?: string[];
+  /** Extra sensitive keys: names (matched like the defaults) or RegExp tested on the snake_case key. */
+  redactKeys?: KeyPattern[];
+  /** Extra value patterns masked in every string, e.g. REDACT_PATTERNS.phoneVN. */
+  redactValues?: RegExp[];
+  /** Final per-field hook: return a replacement, or undefined to drop the field. */
+  redact?: RedactHook;
   snakeCase?: boolean;
   write?: (line: string) => void;
 }
@@ -54,7 +59,8 @@ export function createLogger(options: LoggerOptions = {}): Logger {
   const write = options.write ?? defaultWrite;
   const norm: NormalizeOptions = {
     snakeCase: options.snakeCase ?? true,
-    redactKeys: [...DEFAULT_REDACT_KEYS, ...(options.redactKeys ?? []).map(toSnakeCase)],
+    redactor: createRedactor({ keys: options.redactKeys, values: options.redactValues }),
+    hook: options.redact,
   };
 
   const make = (bound: Fields): Logger => {
