@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "description": "Structured JSON logging for Node services, implementing log contract v1",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TanNgo11/node-log.git"
+  },
+  "homepage": "https://github.com/TanNgo11/node-log#readme",
+  "bugs": {
+    "url": "https://github.com/TanNgo11/node-log/issues"
+  },
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -11,7 +19,8 @@
   "files": [
     "dist",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "CONTRACT.md"
   ],
   "exports": {
     ".": {
