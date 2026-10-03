@@ -36,13 +36,23 @@ function trySetHeader(res: Response, name: string, value: string): void {
   }
 }
 
-/** Wraps an App Router route handler: request context + one http.request line. */
-export function withLogging<R extends Request, C>(
+/** Any App Router route handler: `()`, `(request)` or `(request, { params })`. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type RouteHandler = (...args: any[]) => Response | Promise<Response>;
+
+/**
+ * Wraps an App Router route handler: request context + one http.request line. The returned
+ * function has exactly the handler's parameters, so Next's route type checks still pass.
+ */
+export function withLogging<H extends RouteHandler>(
   log: Logger,
-  handler: (request: R, context: C) => Response | Promise<Response>,
+  handler: H,
   opts: WithLoggingOptions = {},
-): (request: R, context: C) => Promise<Response> {
-  return (request, context) => {
+): (...args: Parameters<H>) => Promise<Response> {
+  return async (...args) => {
+    const request: unknown = args[0];
+    // Next always passes the request; direct calls in unit tests may not.
+    if (!(request instanceof Request)) return handler(...args);
     const ctx = requestContextFields(request.headers);
     const path = new URL(request.url).pathname;
     const start = performance.now();
@@ -62,7 +72,7 @@ export function withLogging<R extends Request, C>(
           opts,
         );
       try {
-        const res = await handler(request, context);
+        const res = await handler(...args);
         summary(res.status, store.error);
         trySetHeader(res, "x-request-id", ctx.request_id);
         return res;

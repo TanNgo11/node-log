@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.1
+
+Fixed:
+- `withLogging` now returns a function with exactly the handler's parameters (`()`, `(request)`
+  or `(request, { params })`), so Next.js route type checks accept the wrapped export. When it is
+  called without a request (a direct call in a unit test), it runs the handler without logging.
+
 ## 0.4.0
 
 Added:

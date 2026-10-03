@@ -35,10 +35,10 @@ describe("withLogging", () => {
   it("logs a thrown error once as 500 and rethrows", async () => {
     const { log, lines } = capture();
     const boom = new Error("db down");
-    const POST = withLogging(log, async () => {
+    const POST = withLogging(log, async (_request: Request) => {
       throw boom;
     });
-    await expect(POST(req("/api/orders", { method: "POST" }), {})).rejects.toBe(boom);
+    await expect(POST(req("/api/orders", { method: "POST" }))).rejects.toBe(boom);
     expect(lines()).toHaveLength(1);
     expect(lines()[0]).toMatchObject({ level: "error", http_status: 500, err_message: "db down" });
     await nextOnRequestError(log)(
@@ -53,10 +53,10 @@ describe("withLogging", () => {
     const redirectErr = Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT;replace;/login;307;" });
     const notFoundErr = Object.assign(new Error("NEXT_HTTP_ERROR_FALLBACK;404"), { digest: "NEXT_HTTP_ERROR_FALLBACK;404" });
     for (const e of [redirectErr, notFoundErr]) {
-      const handler = withLogging(log, async () => {
+      const handler = withLogging(log, async (_request: Request) => {
         throw e;
       });
-      await expect(handler(req("/x"), {})).rejects.toBe(e);
+      await expect(handler(req("/x"))).rejects.toBe(e);
     }
     expect(lines().map((l) => [l.level, l.http_status])).toEqual([
       ["info", 307],
@@ -66,11 +66,11 @@ describe("withLogging", () => {
   });
   it("records errors passed to recordError on the summary line", async () => {
     const { log, lines } = capture();
-    const GET = withLogging(log, async () => {
+    const GET = withLogging(log, async (_request: Request) => {
       recordError(new Error("handled"));
       return Response.json({}, { status: 500 });
     });
-    await GET(req("/x"), {});
+    await GET(req("/x"));
     expect(lines()[0]).toMatchObject({ level: "error", http_status: 500, err_message: "handled" });
   });
 });
@@ -140,10 +140,10 @@ describe("withLogging typing and odd throws", () => {
   });
   it("logs a thrown non-error once, even when onRequestError sees it later", async () => {
     const { log, lines } = capture();
-    const GET = withLogging(log, async () => {
+    const GET = withLogging(log, async (_request: Request) => {
       throw "boom";
     });
-    const thrown = await GET(req("/x"), {}).catch((e: unknown) => e);
+    const thrown = await GET(req("/x")).catch((e: unknown) => e);
     expect(thrown).toBeInstanceOf(Error);
     expect((thrown as Error).message).toBe("boom");
     await nextOnRequestError(log)(thrown, { path: "/x", method: "GET", headers: {} }, {});
@@ -185,5 +185,33 @@ describe("withAction", () => {
       ["info", "action.completed"],
     ]);
     expect(lines()[1]).toMatchObject({ next_control_status: 303 });
+  });
+});
+
+describe("withLogging keeps the handler signature", () => {
+  it("returns a function with the same parameters as the handler", async () => {
+    const { log, lines } = capture();
+    // Zero-parameter handlers are valid Next route handlers; Next still passes the request.
+    const GET = withLogging(log, async () => Response.json({ ok: true }), { route: "/api/health" });
+    const typed: () => Promise<Response> = GET;
+    expect(typeof typed).toBe("function");
+    const runtime = GET as unknown as (request: Request) => Promise<Response>;
+    await runtime(req("/api/health"));
+    expect(lines()[0]).toMatchObject({ http_route: "/api/health", http_status: 200 });
+  });
+  it("calls the handler without logging when no request is passed (direct calls in tests)", async () => {
+    const { log, lines } = capture();
+    const GET = withLogging(log, async () => Response.json({ ok: true }));
+    const res = await GET();
+    expect(res.status).toBe(200);
+    expect(lines()).toHaveLength(0);
+  });
+  it("keeps a two-parameter signature with typed params", () => {
+    const { log } = capture();
+    const GET = withLogging(log, async (_r: NextRequestLike, ctx: { params: Promise<{ id: string }> }) =>
+      Response.json({ id: ctx.params }),
+    );
+    const typed: (r: NextRequestLike, ctx: { params: Promise<{ id: string }> }) => Promise<Response> = GET;
+    expect(typeof typed).toBe("function");
   });
 });
