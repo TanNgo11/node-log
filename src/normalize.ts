@@ -1,5 +1,8 @@
-import { isErrorLike, safeString, serializeError } from "./error";
+import { isErrorLike, serializeError } from "./error";
 import type { Level } from "./levels";
+import { isSensitiveKey, REDACTED, redactingJson, scrubValue, toSnakeCase } from "./redact";
+
+export { DEFAULT_REDACT_KEYS, toSnakeCase } from "./redact";
 
 export type Fields = Record<string, unknown>;
 export type Primitive = string | number | boolean | null;
@@ -9,11 +12,6 @@ export interface NormalizeOptions {
   snakeCase: boolean;
   redactKeys: string[];
 }
-
-export const DEFAULT_REDACT_KEYS = [
-  "password", "passwd", "pwd", "secret", "client_secret", "token", "access_token", "refresh_token",
-  "api_key", "apikey", "authorization", "cookie", "set_cookie", "private_key",
-];
 
 // Keys owned by Vector (overwritten or deleted on ingest) or by the logger itself.
 export const RESERVED_KEYS = new Set([
@@ -27,21 +25,12 @@ const MAX_STACK = 4000;
 const MAX_STRING = 1000;
 const MAX_DEPTH = 3;
 const TRUNCATED = "…[truncated]";
-const REDACTED = "[REDACTED]";
 
 // Fields kept when a line is too large.
 const KEEP_ON_SHRINK = new Set([
   "level", "message", "event", "request_id", "trace_id", "span_id", "job_name", "job_id", "job_attempt",
   "user_id", "tenant_id", "err_type", "err_message", "err_code",
 ]);
-
-export function toSnakeCase(key: string): string {
-  return key
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
-    .replace(/[^A-Za-z0-9_]+/g, "_")
-    .toLowerCase();
-}
 
 export function stripUrl(url: string): string {
   const noQuery = url.split(/[?#]/, 1)[0] ?? "";
@@ -58,10 +47,6 @@ function isPlainObject(v: unknown): v is Fields {
   return proto === Object.prototype || proto === null;
 }
 
-function isSensitive(key: string, redactKeys: string[]): boolean {
-  return redactKeys.some((k) => key === k || key.endsWith(`_${k}`));
-}
-
 function isUrlKey(key: string): boolean {
   return key === "http_path" || key === "http_url" || key.endsWith("_url");
 }
@@ -71,7 +56,7 @@ function flattenInto(out: LogRecord, prefix: string, obj: Fields, depth: number,
     const key = opts.snakeCase ? toSnakeCase(rawKey) : rawKey;
     const full = prefix ? `${prefix}_${key}` : key;
     if (value === undefined || typeof value === "function" || typeof value === "symbol") continue;
-    if (value !== null && (isSensitive(key, opts.redactKeys) || isSensitive(full, opts.redactKeys))) {
+    if (value !== null && (isSensitiveKey(rawKey, opts.redactKeys) || isSensitiveKey(full, opts.redactKeys))) {
       out[full] = REDACTED;
       continue;
     }
@@ -88,14 +73,15 @@ function flattenInto(out: LogRecord, prefix: string, obj: Fields, depth: number,
     } else if (isPlainObject(value) && depth < MAX_DEPTH - 1) {
       flattenInto(out, full, value, depth + 1, opts);
     } else {
-      out[full] = safeString(value);
+      // Arrays, deep objects, class instances: stringified with sensitive keys redacted.
+      out[full] = redactingJson(value, opts.redactKeys);
     }
   }
 }
 
 function finalize(key: string, value: Primitive): Primitive {
   if (typeof value !== "string") return value;
-  const v = isUrlKey(key) ? stripUrl(value) : value;
+  const v = scrubValue(isUrlKey(key) ? stripUrl(value) : value);
   return truncate(v, key === "err_stack" ? MAX_STACK : MAX_STRING);
 }
 
@@ -121,10 +107,8 @@ export function buildRecord(
   flattenInto(flat, "", merged, 0, opts);
   if (err !== undefined) Object.assign(flat, serializeError(err));
 
-  const out: LogRecord = {
-    level,
-    message: truncate(typeof message === "string" ? message : safeString(message), MAX_MESSAGE),
-  };
+  const text = typeof message === "string" ? message : redactingJson(message, opts.redactKeys);
+  const out: LogRecord = { level, message: truncate(scrubValue(text), MAX_MESSAGE) };
   for (const [k, v] of Object.entries(flat)) {
     const key = RESERVED_KEYS.has(k) ? `app_${k}` : k;
     out[key] = finalize(key, v);

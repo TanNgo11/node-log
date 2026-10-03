@@ -1,4 +1,5 @@
 import { globalSingleton } from "./global";
+import { redactingJson } from "./redact";
 
 export interface ErrFields {
   err_type?: string;
@@ -20,16 +21,6 @@ export function isErrorLike(v: unknown): v is Error {
   );
 }
 
-export function safeString(v: unknown): string {
-  if (typeof v === "string") return v;
-  try {
-    const json = JSON.stringify(v, (_k, val) => (typeof val === "bigint" ? val.toString() : val));
-    return json ?? String(v);
-  } catch {
-    return String(v);
-  }
-}
-
 function errorType(e: Error): string {
   if (e.name && e.name !== "Error") return e.name;
   const ctor = (e as { constructor?: { name?: string } }).constructor?.name;
@@ -39,7 +30,7 @@ function errorType(e: Error): string {
 export function serializeError(err: unknown): ErrFields {
   if (!isErrorLike(err)) {
     if (typeof err === "string") return { err_type: "string", err_message: err };
-    return { err_type: typeof err, err_message: safeString(err) };
+    return { err_type: typeof err, err_message: redactingJson(err) };
   }
   const e = err as Error & { code?: unknown; cause?: unknown };
   const out: ErrFields = { err_type: errorType(e), err_message: String(e.message ?? "") };
@@ -53,7 +44,7 @@ export function serializeError(err: unknown): ErrFields {
       causes.push(`${errorType(cause)}: ${cause.message}`);
       cause = (cause as { cause?: unknown }).cause;
     } else {
-      causes.push(safeString(cause));
+      causes.push(redactingJson(cause));
       cause = undefined;
     }
   }
