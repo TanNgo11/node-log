@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.5
+
+Changed:
+- `logProcessWarnings` raises `Error.stackTraceLimit` to 30 (option `stackTraceLimit`; it never
+  lowers it). In production, a pg deprecation's 10 default frames were all knex and Strapi
+  internals, so the app code that caused it was not visible.
+
 ## 0.4.4
 
 Added:

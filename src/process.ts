@@ -63,13 +63,23 @@ export function installProcessHandlers(log: Logger, opts: ProcessHandlerOptions 
 const warningState = globalSingleton("warnings", () => ({ installed: false }));
 
 /**
+ * Node keeps 10 frames by default; ORM/framework frames (knex, Strapi, Prisma) often use all of
+ * them, hiding the app code that triggered a warning or error. Only ever raises the limit.
+ */
+export function raiseStackTraceLimit(limit: number): void {
+  if (Error.stackTraceLimit < limit) Error.stackTraceLimit = limit;
+}
+
+/**
  * Logs Node process warnings (deprecations, MaxListeners...) as `process.warning` lines whose
  * err_stack points at the code that triggered them. Node still prints its own stderr copy
  * unless the process runs with --no-warnings (NODE_OPTIONS=--no-warnings).
+ * Also raises Error.stackTraceLimit (default 30) so the stack reaches past framework frames.
  */
-export function logProcessWarnings(log: Logger): void {
+export function logProcessWarnings(log: Logger, opts: { stackTraceLimit?: number } = {}): void {
   if (warningState.installed || typeof process === "undefined" || typeof process.on !== "function") return;
   warningState.installed = true;
+  raiseStackTraceLimit(opts.stackTraceLimit ?? 30);
   process.on("warning", (warning: Error) => {
     log.warn("process warning", { event: "process.warning", err: warning });
   });

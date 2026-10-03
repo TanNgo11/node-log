@@ -97,3 +97,20 @@ describe("logProcessWarnings", () => {
     expect(process.listenerCount("warning")).toBeLessThanOrEqual(before + 1);
   });
 });
+
+describe("logProcessWarnings stack depth", () => {
+  it("raises Error.stackTraceLimit so app frames survive deep framework stacks", async () => {
+    const { raiseStackTraceLimit } = await import("../src/process");
+    const original = Error.stackTraceLimit;
+    try {
+      Error.stackTraceLimit = 10;
+      raiseStackTraceLimit(30);
+      expect(Error.stackTraceLimit).toBe(30);
+      Error.stackTraceLimit = 50;
+      raiseStackTraceLimit(30);
+      expect(Error.stackTraceLimit).toBe(50);
+    } finally {
+      Error.stackTraceLimit = original;
+    }
+  });
+});
