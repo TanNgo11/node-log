@@ -85,3 +85,24 @@ describe("express adapter", () => {
     expect(lines()[0]!.http_route).toBeUndefined();
   });
 });
+
+describe("express sub-router errors", () => {
+  it("keeps the mount prefix in http_route when a mounted router fails", async () => {
+    const cap = capture();
+    const app = express();
+    app.use(requestLogger(cap.log));
+    const api = express.Router();
+    api.get("/orders/:id", (_req, _res, next) => next(new Error("db down")));
+    app.use("/api", api);
+    app.use(errorRecorder());
+    app.use((_err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      res.status(500).json({});
+    });
+    const server = app.listen(0);
+    await new Promise((r) => server.once("listening", r));
+    close = () => server.close();
+    await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/orders/5`);
+    await settle();
+    expect(cap.lines()[0]).toMatchObject({ http_route: "/api/orders/:id", http_status: 500, err_message: "db down" });
+  });
+});

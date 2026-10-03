@@ -47,3 +47,27 @@ describe("fastify adapter", () => {
     expect(lines()[0]!.http_route).toBeUndefined();
   });
 });
+
+describe("fastify aborted requests", () => {
+  it("logs 499 when the client disconnects before the response", async () => {
+    const cap = capture();
+    const app = Fastify({ logger: false, forceCloseConnections: true });
+    await app.register(fastifyLogger, { log: cap.log });
+    app.get("/slow", async () => {
+      await new Promise((r) => setTimeout(r, 300));
+      return { ok: true };
+    });
+    await app.listen({ port: 0, host: "127.0.0.1" });
+    const { port } = app.server.address() as { port: number };
+    const ac = new AbortController();
+    const pending = fetch(`http://127.0.0.1:${port}/slow`, { signal: ac.signal }).catch(() => undefined);
+    await new Promise((r) => setTimeout(r, 50));
+    ac.abort();
+    await pending;
+    await new Promise((r) => setTimeout(r, 400));
+    await app.close();
+    const summaries = cap.lines().filter((l) => l.event === "http.request");
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]).toMatchObject({ http_status: 499, http_route: "/slow" });
+  });
+});

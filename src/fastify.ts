@@ -1,4 +1,4 @@
-import type { FastifyPluginCallback } from "fastify";
+import type { FastifyPluginCallback, FastifyRequest } from "fastify";
 import { attachStore, recordErrorIn, runWithStore, storeOf } from "./context";
 import { logHttpRequest, requestContextFields, type HttpLogOptions } from "./http";
 import type { Logger } from "./logger";
@@ -8,13 +8,35 @@ export interface FastifyLoggerOptions extends HttpLogOptions {
 }
 
 const starts = new WeakMap<object, number>();
+const finished = new WeakSet<object>();
 
 const plugin: FastifyPluginCallback<FastifyLoggerOptions> = (app, opts, done) => {
+  const summary = (req: FastifyRequest, status: number) => {
+    if (finished.has(req)) return;
+    finished.add(req);
+    const store = storeOf(req);
+    const start = starts.get(req);
+    logHttpRequest(
+      opts.log,
+      {
+        method: req.method,
+        route: req.routeOptions?.url,
+        path: req.url,
+        status,
+        duration_ms: start === undefined ? undefined : performance.now() - start,
+        err: store?.error,
+        fields: store?.fields,
+      },
+      opts,
+    );
+  };
+
   app.addHook("onRequest", (req, reply, next) => {
     const ctx = requestContextFields(req.headers);
     reply.header("x-request-id", ctx.request_id);
-    starts.set(reply, performance.now());
+    starts.set(req, performance.now());
     runWithStore(ctx, (store) => {
+      attachStore(req, store);
       attachStore(reply, store);
       next();
     });
@@ -25,21 +47,12 @@ const plugin: FastifyPluginCallback<FastifyLoggerOptions> = (app, opts, done) =>
     next();
   });
   app.addHook("onResponse", (req, reply, next) => {
-    const store = storeOf(reply);
-    const start = starts.get(reply);
-    logHttpRequest(
-      opts.log,
-      {
-        method: req.method,
-        route: req.routeOptions?.url,
-        path: req.url,
-        status: reply.statusCode,
-        duration_ms: start === undefined ? undefined : performance.now() - start,
-        err: store?.error,
-        fields: store?.fields,
-      },
-      opts,
-    );
+    summary(req, reply.statusCode);
+    next();
+  });
+  // Client closed the connection before the response (Fastify >= 4.21).
+  app.addHook("onRequestAbort", (req, next) => {
+    summary(req, 499);
     next();
   });
   done();

@@ -70,7 +70,9 @@ export function logHttpRequest(log: Logger, info: HttpRequestInfo, opts: HttpLog
     if (info.status < 500) delete errFields.err_stack;
     markLogged(info.err);
   }
-  log[level](`${info.method} ${info.route ?? path} ${info.status}`, {
+  // Route templates keep the message bounded; the raw path would make one message per URL.
+  const message = info.route ? `${info.method} ${info.route} ${info.status}` : `${info.method} ${info.status}`;
+  log[level](message, {
     ...info.fields,
     event: "http.request",
     http_method: info.method,

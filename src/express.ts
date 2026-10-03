@@ -1,11 +1,25 @@
 import type { ErrorRequestHandler, RequestHandler } from "express";
-import { attachStore, recordErrorIn, runWithStore, storeOf } from "./context";
+import { attachStore, recordErrorIn, runWithStore, storeOf, type ContextStore } from "./context";
 import { logHttpRequest, requestContextFields, type HttpLogOptions } from "./http";
 import type { Logger } from "./logger";
 
-function routeOf(req: { baseUrl?: string; route?: { path?: unknown } }): string | undefined {
-  if (req.route?.path === undefined) return undefined;
-  return `${req.baseUrl ?? ""}${String(req.route.path)}` || "/";
+function joinRoute(baseUrl: string | undefined, path: unknown): string {
+  return `${baseUrl ?? ""}${String(path)}` || "/";
+}
+
+// Express assigns req.route when a route matches, while req.baseUrl still holds the mount
+// path. It resets baseUrl before the response ends, so capture the full template here.
+function captureRoute(req: { baseUrl?: string }, store: ContextStore): void {
+  let value: unknown;
+  Object.defineProperty(req, "route", {
+    configurable: true,
+    enumerable: true,
+    get: () => value,
+    set: (route: { path?: unknown } | undefined) => {
+      value = route;
+      if (route?.path !== undefined) store.route = joinRoute(req.baseUrl, route.path);
+    },
+  });
 }
 
 /** Mount before routes. Opens the request context and writes the http.request line. */
@@ -16,6 +30,7 @@ export function requestLogger(log: Logger, opts: HttpLogOptions = {}): RequestHa
     const start = performance.now();
     runWithStore(ctx, (store) => {
       attachStore(res, store);
+      captureRoute(req, store);
       let done = false;
       const finish = () => {
         if (done) return;
@@ -24,7 +39,7 @@ export function requestLogger(log: Logger, opts: HttpLogOptions = {}): RequestHa
           log,
           {
             method: req.method,
-            route: routeOf(req),
+            route: store.route,
             path: req.originalUrl,
             status: res.writableFinished || res.headersSent ? res.statusCode : 499,
             duration_ms: performance.now() - start,

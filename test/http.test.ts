@@ -60,7 +60,7 @@ describe("logHttpRequest", () => {
       http_status: 201,
       duration_ms: 42,
     });
-    expect(notFound).toMatchObject({ level: "warn", message: "GET /missing 404" });
+    expect(notFound).toMatchObject({ level: "warn", message: "GET 404", http_path: "/missing" });
     expect(notFound!.http_route).toBeUndefined();
     expect(failed!.level).toBe("error");
   });

@@ -33,3 +33,24 @@ describe("context", () => {
     expect(storeOf(null)).toBeUndefined();
   });
 });
+
+describe("nested contexts", () => {
+  it("addContext and recordError reach the enclosing request context", async () => {
+    await runWithStore({ request_id: "r1" }, async (request) => {
+      await withContext({ step: "inner" }, async () => {
+        addContext({ user_id: "u1" });
+        recordError(new Error("inner failure"));
+      });
+      expect(request.fields).toEqual({ request_id: "r1", user_id: "u1" });
+      expect((request.error as Error).message).toBe("inner failure");
+    });
+  });
+  it("does not overwrite an error the outer context already recorded", () => {
+    runWithStore({}, (outer) => {
+      const first = new Error("first");
+      recordError(first);
+      withContext({}, () => recordError(new Error("second")));
+      expect(outer.error).toBe(first);
+    });
+  });
+});
