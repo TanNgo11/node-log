@@ -38,3 +38,27 @@ describe("patchConsole", () => {
     expect(console.log).toBe(original);
   });
 });
+
+describe("patchConsole skipping", () => {
+  it("skips errors that are already logged", async () => {
+    const { markLogged } = await import("../src/error");
+    const { log, lines } = capture();
+    restore = patchConsole(log);
+    const err = new Error("already on the http.request line");
+    markLogged(err);
+    console.error(err);
+    console.error("fresh", new Error("new one"));
+    restore();
+    restore = undefined;
+    expect(lines().map((l) => l.err_message)).toEqual(["new one"]);
+  });
+  it("applies a custom skip predicate", () => {
+    const { log, lines } = capture();
+    restore = patchConsole(log, { skip: (args) => args[0] === "noise" });
+    console.log("noise");
+    console.log("signal");
+    restore();
+    restore = undefined;
+    expect(lines().map((l) => l.message)).toEqual(["signal"]);
+  });
+});

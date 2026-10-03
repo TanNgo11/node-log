@@ -1,5 +1,5 @@
 import { runWithStore } from "./context";
-import { isLogged, markLogged } from "./error";
+import { isErrorLike, isLogged, markLogged } from "./error";
 import { logHttpRequest, requestContextFields, type HeaderSource, type HttpLogOptions } from "./http";
 import type { Logger } from "./logger";
 import type { Fields } from "./normalize";
@@ -85,6 +85,15 @@ export function withLogging<H extends RouteHandler>(
       }
     });
   };
+}
+
+/**
+ * patchConsole skip predicate for Next.js: Next prints a render error with console.error right
+ * before calling onRequestError, by then the error carries a digest. Dropping that console
+ * call leaves the single, richer onRequestError line.
+ */
+export function nextConsoleSkip(args: unknown[]): boolean {
+  return args.some((arg) => isErrorLike(arg) && typeof (arg as { digest?: unknown }).digest === "string");
 }
 
 export interface NextRequestInfo {

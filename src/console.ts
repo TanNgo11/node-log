@@ -1,4 +1,4 @@
-import { isErrorLike } from "./error";
+import { isErrorLike, isLogged } from "./error";
 import type { Level } from "./levels";
 import type { Logger } from "./logger";
 import { defaultRedactor } from "./redact";
@@ -7,12 +7,18 @@ const METHODS = { log: "info", info: "info", warn: "warn", error: "error", debug
 type Method = keyof typeof METHODS;
 type ConsoleFn = (...args: unknown[]) => void;
 
+export interface PatchConsoleOptions {
+  /** Return true to drop a console call, e.g. errors a framework hook will log anyway. */
+  skip?: (args: unknown[]) => boolean;
+}
+
 /**
  * Routes console.log/info/warn/error/debug/trace through the logger, so legacy console calls
  * and framework output (e.g. Next.js errors) become JSON lines with request context.
+ * Calls carrying an error that is already on a summary line are dropped.
  * Returns a function that restores the previous console methods.
  */
-export function patchConsole(log: Logger): () => void {
+export function patchConsole(log: Logger, opts: PatchConsoleOptions = {}): () => void {
   const target = console as unknown as Record<Method, ConsoleFn>;
   const saved = {} as Record<Method, ConsoleFn>;
   let inside = false;
@@ -26,6 +32,7 @@ export function patchConsole(log: Logger): () => void {
       if (inside) return previous.apply(console, args);
       inside = true;
       try {
+        if (args.some((arg) => isErrorLike(arg) && isLogged(arg)) || opts.skip?.(args)) return;
         let err: unknown;
         const parts: string[] = [];
         for (const arg of args) {

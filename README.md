@@ -217,12 +217,14 @@ Server components and anything not wrapped:
 ```ts
 // instrumentation.ts
 import { patchConsole } from "@tanngo11/log";
-import { nextOnRequestError, registerNext } from "@tanngo11/log/next";
+import { nextConsoleSkip, nextOnRequestError, registerNext } from "@tanngo11/log/next";
 import { log } from "@/lib/log";
 
 export function register() {
   registerNext(log); // app.started + crash logging (Next keeps serving, so no exit)
-  patchConsole(log); // Next's own error output and leftover console.* become JSON
+  // Next prints render errors with console.error before onRequestError logs them:
+  // nextConsoleSkip drops that copy so each error is one line.
+  patchConsole(log, { skip: nextConsoleSkip });
 }
 export const onRequestError = nextOnRequestError(log);
 ```
@@ -301,7 +303,8 @@ return [
   It is recorded as `upstream_request_id`, which links both services' logs. Set
   `trustIncomingRequestId: true` to adopt it instead.
 - Winston levels are mapped: `http` and `verbose` become `debug`, `silly` becomes `trace`.
-  `LOG_LEVEL` filters.
+  `LOG_LEVEL` filters. A level set on the winston logger at runtime is honoured too: Strapi's
+  data export/import commands set it to `error`.
 
 Tested against the versions Strapi 5.51 uses: Koa 2, `@koa/router` 12 and winston 3.10.
 

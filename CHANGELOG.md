@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.3
+
+Fixed:
+- `patchConsole` drops console calls that carry an error already written on a summary line, so a
+  failed request is not logged twice.
+- The Strapi transport honours the winston logger's runtime level. Strapi's data export and
+  import commands set it to `error` to keep their output quiet.
+
+Added:
+- `patchConsole(log, { skip })`.
+- `nextConsoleSkip` (`/next`): drops Next's console copy of a render error, which
+  `onRequestError` logs with route and digest.
+
 ## 0.4.2
 
 Fixed:

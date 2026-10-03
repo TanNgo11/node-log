@@ -144,15 +144,26 @@ function forward(log: Logger, info: Record<string, unknown>): void {
  * the logger (LOG_LEVEL).
  */
 export function strapiLoggerConfig(log: Logger) {
+  // The winston logger that pipes into this transport; its level can change at runtime
+  // (Strapi's data export/import commands set it to "error").
+  let parent: { level?: string; levels?: Record<string, number> } | undefined;
+  const allowed = (info: Record<string, unknown>): boolean => {
+    const rank = parent?.levels?.[String(info.level)];
+    const max = parent?.level === undefined ? undefined : parent.levels?.[parent.level];
+    return rank === undefined || max === undefined || rank <= max;
+  };
   const transport = new Writable({
     objectMode: true,
     write(info: Record<string, unknown>, _encoding, callback) {
       try {
-        forward(log, info);
+        if (allowed(info)) forward(log, info);
       } finally {
         callback();
       }
     },
+  });
+  transport.on("pipe", (source: unknown) => {
+    parent = source as typeof parent;
   });
   // winston requires a `log(info, callback)` method on stream transports; writes go through write().
   Object.assign(transport, {

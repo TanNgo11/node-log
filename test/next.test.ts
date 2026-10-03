@@ -228,3 +228,13 @@ describe("withLogging keeps the handler return type", () => {
     expect(res.cookies.get("a")).toBe("a");
   });
 });
+
+describe("nextConsoleSkip", () => {
+  it("defers digest-carrying render errors to onRequestError and keeps everything else", async () => {
+    const { nextConsoleSkip } = await import("../src/next");
+    const renderError = Object.assign(new Error("render failed"), { digest: "123456" });
+    expect(nextConsoleSkip([renderError])).toBe(true);
+    expect(nextConsoleSkip([new Error("plain")])).toBe(false);
+    expect(nextConsoleSkip(["[cms] unavailable", { code: "X" }])).toBe(false);
+  });
+});

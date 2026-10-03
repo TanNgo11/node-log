@@ -164,3 +164,14 @@ describe("strapiLoggerConfig", () => {
     ]);
   });
 });
+
+describe("strapiLoggerConfig level", () => {
+  it("honours a level set on the winston logger at runtime (Strapi CLI quiets logs this way)", async () => {
+    const { strapiLog, lines } = await start();
+    strapiLog.level = "error";
+    strapiLog.info("export progress");
+    strapiLog.warn("skipped file");
+    strapiLog.error("export failed");
+    expect(lines().map((l) => l.message)).toEqual(["export failed"]);
+  });
+});
