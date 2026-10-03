@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0
+
+Added:
+- `@tanngo11/log/strapi` for Strapi 5:
+  - `strapiLoggerConfig(log)` for `config/logger.ts`, so `strapi.log.*` becomes contract JSON;
+  - `strapiRequestLogger`, which replaces `strapi::logger` and writes one `http.request` line per
+    request;
+  - `strapiErrorCapture`, which makes an unhandled error appear once instead of twice.
+- `upstream_request_id`: the caller's request id when the service issues its own id.
+
 ## 0.3.0
 
 Added:

@@ -256,6 +256,55 @@ new Worker("invoices", loggedProcessor(log, "send_invoice_email", async (job) =>
 - When enqueueing from a request, use `queue.add(name, jobData(data))`. The job's logs then carry
   that request's `request_id`.
 
+## Strapi 5
+
+`config/logger.ts` routes every `strapi.log.*` call (app code and framework) through the logger:
+
+```ts
+import { strapiLoggerConfig } from "@tanngo11/log/strapi";
+import { log } from "../src/shared/log";
+
+export default strapiLoggerConfig(log);
+```
+
+`config/middlewares.ts` replaces `'strapi::logger'` and adds the error capture right after
+`'strapi::errors'`:
+
+```ts
+// src/middlewares/http-log/index.ts
+import { strapiRequestLogger } from "@tanngo11/log/strapi";
+import { log } from "../../shared/log";
+export default () => strapiRequestLogger({ log });
+
+// src/middlewares/error-capture/index.ts
+import { strapiErrorCapture } from "@tanngo11/log/strapi";
+export default () => strapiErrorCapture();
+
+// config/middlewares.ts
+return [
+  { resolve: "./src/middlewares/http-log" },      // instead of 'strapi::logger', first in the list
+  "strapi::errors",
+  { resolve: "./src/middlewares/error-capture" }, // right after strapi::errors
+  // ...
+];
+```
+
+- Each request gets one `http.request` line with the full route template (`/api/articles/:id`,
+  read from `@koa/router`), its status and duration.
+- An unhandled error is written once, on that line. The copy that `strapi::errors` logs through
+  `strapi.log.error` is not written again.
+- Errors the app logs itself through `strapi.log.error(err)` stay as their own lines, with
+  `event: "strapi.log"`.
+- `request_id` reuses `ctx.state.requestId` when the app sets one (configurable with `stateKey`).
+  Otherwise a UUID is put there, so the app's own correlation middleware keeps the same id.
+- The caller's `x-request-id` (for example from a Next.js BFF) is not trusted as the request id.
+  It is recorded as `upstream_request_id`, which links both services' logs. Set
+  `trustIncomingRequestId: true` to adopt it instead.
+- Winston levels are mapped: `http` and `verbose` become `debug`, `silly` becomes `trace`.
+  `LOG_LEVEL` filters.
+
+Tested against the versions Strapi 5.51 uses: Koa 2, `@koa/router` 12 and winston 3.10.
+
 ## Prisma (5 and 6)
 
 ```ts

@@ -30,7 +30,7 @@ stream, nested fields flattened with `_`) → MCP for AI agents.
 | Group | Fields |
 |---|---|
 | Core | `level` (`trace\|debug\|info\|warn\|error\|fatal`), `message`, `event` (required for warn/error/fatal) |
-| Correlation | `request_id`, `trace_id`, `span_id`, `job_name`, `job_id`, `job_attempt`, `user_id` (internal id, never an email), `tenant_id` |
+| Correlation | `request_id`, `upstream_request_id` (the caller's id when this service issues its own), `trace_id`, `span_id`, `job_name`, `job_id`, `job_attempt`, `user_id` (internal id, never an email), `tenant_id` |
 | Inbound HTTP | `http_method`, `http_route` (template, e.g. `/orders/:id`), `http_path` (no query string), `http_status`, `duration_ms` |
 | Outbound HTTP | `peer_service`, `http_method`, `http_url` (no query string or credentials), `http_status`, `duration_ms` |
 | Error | `err_type`, `err_message`, `err_code` (string), `err_stack`, `err_cause` (cause chain joined with ` <- `, max 5) |
@@ -88,6 +88,7 @@ System events shared by all services:
 | `action.completed` | info | a server action finished, including a redirect or not-found (with `action_name`, `duration_ms`) |
 | `action.failed` | error | a server action threw |
 | `console` | by console method | a legacy `console.*` call (with `console_method`) |
+| `strapi.log` | warn/error | a framework or app `strapi.log` warn/error call that carries no `event` of its own |
 
 ## 5. What to log
 

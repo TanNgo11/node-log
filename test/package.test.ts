@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
 
-const entries = ["index", "express", "fastify", "nest", "next", "next-edge", "bullmq", "prisma"];
+const entries = ["index", "express", "fastify", "nest", "next", "next-edge", "bullmq", "prisma", "strapi"];
 const require = createRequire(import.meta.url);
 const dist = (name: string, ext: string) => fileURLToPath(new URL(`../dist/${name}.${ext}`, import.meta.url));
 const importDist = (name: string) => import(/* @vite-ignore */ pathToFileURL(dist(name, "js")).href);
