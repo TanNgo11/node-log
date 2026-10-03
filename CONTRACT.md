@@ -65,13 +65,17 @@ A concept has one name in every service.
   example `order.created` or `payment.failed`.
 - Once an `event` name is used, never rename it.
 - `message` is a **constant** English phrase. Variables go in fields, not in the text.
+- Two exceptions:
+  - `http.request` uses `"<METHOD> <route template> <status>"`, or `"<METHOD> <status>"` when the
+    route is unknown. It never contains the raw path.
+  - `console` lines (legacy `console.*` calls routed through the logger) keep the original text.
 
 System events shared by all services:
 
 | Event | Level | When |
 |---|---|---|
 | `app.started` | info | ready to serve (with `runtime_version`, `log_level`, `port`) |
-| `app.stopping` | info | shutdown signal received |
+| `app.stopping` | info | the app starts its own graceful shutdown |
 | `app.crashed` | fatal | uncaught error, process exits |
 | `app.unhandled_error` | error | uncaught error, process keeps running |
 | `config.invalid` | fatal | missing or invalid config at startup (never log the value) |
@@ -80,7 +84,10 @@ System events shared by all services:
 | `db.slow_query` | warn | a query took longer than the threshold (default 500 ms) |
 | `db.error` | error | a database error that no upper layer handles |
 | `job.started` / `job.completed` | info | job lifecycle |
-| `job.failed` | warn if retries remain, error on the final attempt | job error |
+| `job.failed` | warn if retries remain, error on the final attempt or a non-retryable error | job error |
+| `action.completed` | info | a server action finished, including a redirect or not-found (with `action_name`, `duration_ms`) |
+| `action.failed` | error | a server action threw |
+| `console` | by console method | a legacy `console.*` call (with `console_method`) |
 
 ## 5. What to log
 

@@ -73,11 +73,23 @@ Applied in this order:
    to turn this off.
 4. Prefixes keys that Vector overwrites with `app_`: `project`, `service`, `version`, `host`,
    `msg`, `level`, `message`...
-5. Replaces the values of sensitive keys with `[REDACTED]`: `password`, `token`, `authorization`,
-   `cookie`, `api_key`..., and any key ending in `_<sensitive key>`.
-6. Strips the query string, hash and credentials from `http_path`, `http_url` and every
+5. Replaces the values of sensitive keys with `[REDACTED]`, at any depth, including inside
+   arrays.
+   - A key counts as sensitive when any snake_case part of it names a secret: `password`,
+     `secret`, `token`, `api_key`, `authorization`, `cookie`, `session_id`, `credentials`, `dsn`,
+     `connection_string`, `jwt`...
+   - So `stripeSecretKey` and `x-api-key` are redacted.
+   - Keys that only describe a secret stay readable: `token_count`, `token_type`,
+     `password_reset_at`.
+   - `redactKeys` adds more key names.
+6. Masks secrets inside any string value or message:
+   - credentials in URLs (`postgres://[REDACTED]@db`);
+   - `Bearer` tokens;
+   - JWTs;
+   - email addresses (`***@example.com`).
+7. Strips the query string, hash and credentials from `http_path`, `http_url` and every
    `*_url` field.
-7. Truncates `message` to 500 chars, `err_stack` to 4000 and other strings to 1000. Lines over
+8. Truncates `message` to 500 chars, `err_stack` to 4000 and other strings to 1000. Lines over
    16000 bytes keep only core fields and get `log_truncated: true`.
 
 The logger never throws into your code.
@@ -85,16 +97,35 @@ The logger never throws into your code.
 ### Outbound calls, jobs, lifecycle
 
 ```ts
-import { createFetch, installProcessHandlers, logStartup, runJob } from "@tanngo11/log";
+import { createFetch, installProcessHandlers, jobData, logShutdown, logStartup, runJob } from "@tanngo11/log";
 
 const ghn = createFetch(log, { peer_service: "ghn" });                 // logs http.outbound on 5xx, network error, or > 1s
 const api = createFetch(log, { peer_service: "backend-api", internal: true }); // also forwards x-request-id / traceparent
 
 await runJob(log, { job_name: "sync_stock", job_id: id }, () => syncStock()); // job.completed / job.failed
+await queue.add("send_invoice", jobData({ invoice_id }));             // carries the current request_id into the job
 
-installProcessHandlers(log); // app.crashed (fatal, exit 1) on uncaught errors; app.stopping on SIGTERM/SIGINT
+installProcessHandlers(log); // app.crashed on uncaught errors, then exit(1) after 1s so Sentry & co. can flush
 logStartup(log, { port: 3000 }); // app.started
+
+process.once("SIGTERM", async () => {
+  logShutdown(log, { signal: "SIGTERM" }); // app.stopping; the library never handles signals itself
+  await server.close();
+  process.exit(0);
+});
 ```
+
+### Legacy `console.*` calls
+
+```ts
+import { patchConsole } from "@tanngo11/log";
+
+patchConsole(log); // console.log/info → info, warn → warn, error → error, debug/trace → debug
+```
+
+Every `console.*` call becomes a JSON line with `event: "console"` and the request context. This
+gets an old codebase to contract level L1 in one line. Framework output that goes through
+`console`, such as Next.js error printing, is covered too. The function returns `restore()`.
 
 ## Express
 
@@ -139,18 +170,30 @@ Route handlers:
 import { withLogging } from "@tanngo11/log/next";
 import { log } from "@/lib/log";
 
-export const GET = withLogging(log, async (request, { params }) => { /* ... */ }, { route: "/api/orders/[id]" });
+export const GET = withLogging(log, async (request: NextRequest, { params }) => { /* ... */ }, { route: "/api/orders/[id]" });
 ```
 
-Server components, server actions and anything not wrapped:
+Server actions:
+
+```ts
+"use server";
+import { withAction } from "@tanngo11/log/next";
+
+export const saveOrder = withAction(log, "save_order", async (input: OrderInput) => { /* ... */ });
+// action.completed (info) or action.failed (error, once); redirect()/notFound() count as completed
+```
+
+Server components and anything not wrapped:
 
 ```ts
 // instrumentation.ts
+import { patchConsole } from "@tanngo11/log";
 import { nextOnRequestError, registerNext } from "@tanngo11/log/next";
 import { log } from "@/lib/log";
 
 export function register() {
   registerNext(log); // app.started + crash logging (Next keeps serving, so no exit)
+  patchConsole(log); // Next's own error output and leftover console.* become JSON
 }
 export const onRequestError = nextOnRequestError(log);
 ```
@@ -179,9 +222,10 @@ import { loggedProcessor } from "@tanngo11/log/bullmq";
 new Worker("invoices", loggedProcessor(log, "send_invoice_email", async (job) => { /* ... */ }));
 ```
 
-- The final attempt fails at `error` level, earlier attempts at `warn`.
-- Put `request_id` in `job.data` when enqueueing from a request, so the job's logs link back to
-  that request.
+- A failure on the final attempt, or an `UnrecoverableError`, is logged at `error`. Earlier
+  attempts fail at `warn`.
+- When enqueueing from a request, use `queue.add(name, jobData(data))`. The job's logs then carry
+  that request's `request_id`.
 
 ## Migrating from the shared winston logger
 
@@ -192,6 +236,7 @@ For repos using the old shared winston logger (S3 transport, nested metadata):
 3. In `withErrorHandler`, replace the `logger.error("API Error", ...)` call with
    `recordError(error)`. Then wrap routes with `withLogging`.
 4. Remove the S3 transport. OpenObserve already stores the logs.
+5. Call `patchConsole(log)` once at startup. Remaining `console.*` calls are then JSON too.
 
 ## Rules the library cannot enforce
 
