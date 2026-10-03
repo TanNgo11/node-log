@@ -23,6 +23,11 @@ export function nextControlStatus(err: unknown): number | undefined {
   return undefined;
 }
 
+function asError(value: unknown): unknown {
+  if (typeof value === "object" && value !== null) return value;
+  return Object.assign(new Error(String(value)), { name: "NonErrorThrown", thrown: value });
+}
+
 function trySetHeader(res: Response, name: string, value: string): void {
   try {
     res.headers.set(name, value);
@@ -32,11 +37,11 @@ function trySetHeader(res: Response, name: string, value: string): void {
 }
 
 /** Wraps an App Router route handler: request context + one http.request line. */
-export function withLogging<C>(
+export function withLogging<R extends Request, C>(
   log: Logger,
-  handler: (request: Request, context: C) => Response | Promise<Response>,
+  handler: (request: R, context: C) => Response | Promise<Response>,
   opts: WithLoggingOptions = {},
-): (request: Request, context: C) => Promise<Response> {
+): (request: R, context: C) => Promise<Response> {
   return (request, context) => {
     const ctx = requestContextFields(request.headers);
     const path = new URL(request.url).pathname;
@@ -61,8 +66,10 @@ export function withLogging<C>(
         summary(res.status, store.error);
         trySetHeader(res, "x-request-id", ctx.request_id);
         return res;
-      } catch (err) {
-        const control = nextControlStatus(err);
+      } catch (caught) {
+        const control = nextControlStatus(caught);
+        // Non-objects cannot be marked as logged, so onRequestError would log them again.
+        const err = control === undefined ? asError(caught) : caught;
         summary(control ?? 500, control === undefined ? err : store.error);
         throw err;
       }

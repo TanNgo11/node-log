@@ -7,8 +7,8 @@ export interface JobInfo {
   job_name: string;
   job_id?: string | number;
   job_attempt?: number;
-  /** No retries left after this attempt. Defaults to true when unknown. */
-  final_attempt?: boolean;
+  /** No retries left after this attempt (or decided per error). Defaults to true when unknown. */
+  final_attempt?: boolean | ((err: unknown) => boolean);
   request_id?: string;
   fields?: Fields;
 }
@@ -26,7 +26,7 @@ export async function runJob<T>(log: Logger, info: JobInfo, fn: () => T | Promis
       log.info("job completed", { event: "job.completed", duration_ms: Math.round(performance.now() - start) });
       return result;
     } catch (err) {
-      const final = info.final_attempt ?? true;
+      const final = typeof info.final_attempt === "function" ? info.final_attempt(err) : (info.final_attempt ?? true);
       log[final ? "error" : "warn"]("job failed", {
         event: "job.failed",
         duration_ms: Math.round(performance.now() - start),

@@ -83,3 +83,16 @@ describe("nest adapter", () => {
     ]);
   });
 });
+
+describe("NestLogger extra arguments", () => {
+  it("keeps object and primitive arguments as fields", () => {
+    cap.raw.length = 0;
+    const nl = new NestLogger(cap.log);
+    nl.log("order created", { orderId: 42 }, "OrdersService");
+    nl.warn("retrying", 3);
+    expect(cap.lines()).toMatchObject([
+      { level: "info", message: "order created", order_id: 42, nest_context: "OrdersService" },
+      { level: "warn", message: "retrying", nest_args: "[3]" },
+    ]);
+  });
+});

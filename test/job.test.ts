@@ -46,3 +46,25 @@ describe("loggedProcessor", () => {
     expect(lines()[1]).toMatchObject({ level: "warn", job_attempt: 1 });
   });
 });
+
+describe("loggedProcessor details", () => {
+  it("passes every BullMQ argument through to the processor", async () => {
+    const { log } = capture();
+    const seen: unknown[] = [];
+    const processor = loggedProcessor(log, "x", async (...args: unknown[]) => {
+      seen.push(...args);
+    });
+    const signal = new AbortController().signal;
+    await (processor as (...a: unknown[]) => Promise<void>)({ id: "1", attemptsMade: 0 }, "token-1", signal);
+    expect(seen).toEqual([{ id: "1", attemptsMade: 0 }, "token-1", signal]);
+  });
+  it("logs UnrecoverableError at error level even with retries left", async () => {
+    const { log, lines } = capture();
+    const unrecoverable = Object.assign(new Error("bad payload"), { name: "UnrecoverableError" });
+    const processor = loggedProcessor(log, "x", async () => {
+      throw unrecoverable;
+    });
+    await expect(processor({ id: "1", attemptsMade: 0, opts: { attempts: 5 } })).rejects.toBe(unrecoverable);
+    expect(lines()[0]).toMatchObject({ level: "error", event: "job.failed" });
+  });
+});

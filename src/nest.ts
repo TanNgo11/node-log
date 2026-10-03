@@ -50,6 +50,14 @@ export class NestLogger implements LoggerService {
     }
 
     const fields: Fields = { nest_context: nestContext };
+    // Extra arguments: objects become fields, errors become err, anything else goes to nest_args.
+    const extras: unknown[] = [];
+    for (const arg of rest) {
+      if (arg instanceof Error && fields.err === undefined) fields.err = arg;
+      else if (typeof arg === "object" && arg !== null && !Array.isArray(arg)) Object.assign(fields, arg);
+      else extras.push(arg);
+    }
+    if (extras.length > 0) fields.nest_args = extras;
     let text: string;
     if (message instanceof Error) {
       fields.err = message;
