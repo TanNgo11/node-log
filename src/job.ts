@@ -1,4 +1,4 @@
-import { withContext } from "./context";
+import { getContext, withContext } from "./context";
 import { markLogged } from "./error";
 import type { Logger } from "./logger";
 import type { Fields } from "./normalize";
@@ -36,4 +36,11 @@ export async function runJob<T>(log: Logger, info: JobInfo, fn: () => T | Promis
       throw err;
     }
   });
+}
+
+/** Adds the current request_id to a job payload, so the job's logs link back to the request. */
+export function jobData<T extends Record<string, unknown>>(data: T): T & { request_id?: string } {
+  const requestId = getContext().request_id;
+  if (typeof requestId !== "string" || data.request_id !== undefined) return data;
+  return { ...data, request_id: requestId };
 }

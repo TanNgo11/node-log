@@ -151,3 +151,39 @@ describe("withLogging typing and odd throws", () => {
     expect(lines()[0]).toMatchObject({ level: "error", err_message: "boom" });
   });
 });
+
+describe("withAction", () => {
+  it("logs action.completed with request context from headers", async () => {
+    const { withAction } = await import("../src/next");
+    const { log, lines } = capture();
+    const save = withAction(log, "save_order", async (id: string) => {
+      log.info("saving", { event: "order.saving", order_id: id });
+      return id;
+    }, { headers: () => new Headers({ "x-request-id": "r-7" }) });
+    expect(await save("o1")).toBe("o1");
+    expect(lines()).toMatchObject([
+      { event: "order.saving", request_id: "r-7", action_name: "save_order" },
+      { level: "info", event: "action.completed", message: "server action completed", action_name: "save_order", request_id: "r-7" },
+    ]);
+  });
+  it("logs action.failed once and rethrows; redirects count as completed", async () => {
+    const { withAction } = await import("../src/next");
+    const { log, lines } = capture();
+    const boom = new Error("db down");
+    const fail = withAction(log, "fail", async () => {
+      throw boom;
+    }, { headers: () => new Headers() });
+    await expect(fail()).rejects.toBe(boom);
+    await nextOnRequestError(log)(boom, { path: "/", method: "POST", headers: {} }, { routeType: "action" });
+    const redirectErr = Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT;push;/done;303;" });
+    const go = withAction(log, "go", async () => {
+      throw redirectErr;
+    }, { headers: () => new Headers() });
+    await expect(go()).rejects.toBe(redirectErr);
+    expect(lines().map((l) => [l.level, l.event])).toEqual([
+      ["error", "action.failed"],
+      ["info", "action.completed"],
+    ]);
+    expect(lines()[1]).toMatchObject({ next_control_status: 303 });
+  });
+});

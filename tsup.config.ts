@@ -15,5 +15,5 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   target: "node20",
-  external: ["rxjs", "express", "fastify", "@nestjs/common"],
+  external: ["rxjs", "express", "fastify", "@nestjs/common", "next"],
 });

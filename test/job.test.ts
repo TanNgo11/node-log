@@ -68,3 +68,15 @@ describe("loggedProcessor details", () => {
     expect(lines()[0]).toMatchObject({ level: "error", event: "job.failed" });
   });
 });
+
+describe("jobData", () => {
+  it("adds the current request_id to a job payload", async () => {
+    const { jobData } = await import("../src/job");
+    const { withContext } = await import("../src/context");
+    expect(jobData({ invoice_id: "i1" })).toEqual({ invoice_id: "i1" });
+    await withContext({ request_id: "r1" }, async () => {
+      expect(jobData({ invoice_id: "i1" })).toEqual({ invoice_id: "i1", request_id: "r1" });
+      expect(jobData({ request_id: "keep" })).toEqual({ request_id: "keep" });
+    });
+  });
+});

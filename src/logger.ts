@@ -37,11 +37,14 @@ function env(name: string): string | undefined {
   return typeof process !== "undefined" ? process.env?.[name] : undefined;
 }
 
+// Captured before patchConsole can replace it, so the fallback never loops into the logger.
+const consoleLog = console.log.bind(console);
+
 function defaultWrite(line: string): void {
   if (typeof process !== "undefined" && typeof process.stdout?.write === "function") {
     process.stdout.write(`${line}\n`);
   } else {
-    console.log(line);
+    consoleLog(line);
   }
 }
 

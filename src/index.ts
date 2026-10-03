@@ -14,5 +14,6 @@ export {
   type HttpRequestInfo,
 } from "./http";
 export { createFetch, type FetchLogOptions } from "./fetch";
-export { runJob, type JobInfo } from "./job";
+export { jobData, runJob, type JobInfo } from "./job";
+export { patchConsole } from "./console";
 export { installProcessHandlers, logShutdown, logStartup, type ProcessHandlerOptions } from "./process";

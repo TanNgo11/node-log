@@ -1,6 +1,6 @@
 import { runWithStore } from "./context";
-import { isLogged } from "./error";
-import { logHttpRequest, requestContextFields, type HttpLogOptions } from "./http";
+import { isLogged, markLogged } from "./error";
+import { logHttpRequest, requestContextFields, type HeaderSource, type HttpLogOptions } from "./http";
 import type { Logger } from "./logger";
 import type { Fields } from "./normalize";
 import { installProcessHandlers, logStartup } from "./process";
@@ -120,4 +120,53 @@ export function registerNext(log: Logger, fields?: Fields): void {
   // Next keeps serving after an unhandled rejection, so do not exit.
   installProcessHandlers(log, { exitOnCrash: false });
   logStartup(log, { port: process.env.PORT ? Number(process.env.PORT) : undefined, ...fields });
+}
+
+export interface WithActionOptions {
+  /** Request headers source. Defaults to `headers()` from next/headers. */
+  headers?: () => HeaderSource | Promise<HeaderSource>;
+}
+
+async function nextHeaders(): Promise<HeaderSource> {
+  try {
+    const mod = (await import("next/headers")) as { headers: () => HeaderSource | Promise<HeaderSource> };
+    return await mod.headers();
+  } catch {
+    // Called outside a request (tests, scripts) or Next is not installed.
+    return {};
+  }
+}
+
+/**
+ * Wraps a server action: request context (request_id from x-request-id) plus one
+ * `action.completed` / `action.failed` line. redirect()/notFound() count as completed.
+ */
+export function withAction<A extends unknown[], R>(
+  log: Logger,
+  name: string,
+  action: (...args: A) => Promise<R>,
+  opts: WithActionOptions = {},
+): (...args: A) => Promise<R> {
+  return async (...args) => {
+    const headers = await (opts.headers ?? nextHeaders)();
+    const start = performance.now();
+    return runWithStore({ ...requestContextFields(headers), action_name: name }, async (store) => {
+      const fields = () => ({ ...store.fields, duration_ms: Math.round(performance.now() - start) });
+      try {
+        const result = await action(...args);
+        log.info("server action completed", { ...fields(), event: "action.completed", err: store.error });
+        return result;
+      } catch (caught) {
+        const control = nextControlStatus(caught);
+        if (control !== undefined) {
+          log.info("server action completed", { ...fields(), event: "action.completed", next_control_status: control });
+          throw caught;
+        }
+        const err = asError(caught);
+        log.error("server action failed", { ...fields(), event: "action.failed", err });
+        markLogged(err);
+        throw err;
+      }
+    });
+  };
 }
