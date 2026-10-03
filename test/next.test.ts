@@ -215,3 +215,16 @@ describe("withLogging keeps the handler signature", () => {
     expect(typeof typed).toBe("function");
   });
 });
+
+class ResponseWithCookies extends Response {
+  cookies = { get: (name: string) => name };
+}
+
+describe("withLogging keeps the handler return type", () => {
+  it("resolves to the handler's own Response subclass (e.g. NextResponse)", async () => {
+    const { log } = capture();
+    const POST = withLogging(log, async (_request: Request) => new ResponseWithCookies("ok"));
+    const res = await POST(req("/x", { method: "POST" }));
+    expect(res.cookies.get("a")).toBe("a");
+  });
+});

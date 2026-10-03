@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.2
+
+Fixed:
+- `withLogging` resolves to the handler's own response type (for example `NextResponse` with
+  `.cookies`) instead of plain `Response`.
+- `package.json` is listed in `exports`, so tools that read it can resolve it.
+
 ## 0.4.1
 
 Fixed:

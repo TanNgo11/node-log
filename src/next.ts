@@ -48,15 +48,15 @@ export function withLogging<H extends RouteHandler>(
   log: Logger,
   handler: H,
   opts: WithLoggingOptions = {},
-): (...args: Parameters<H>) => Promise<Response> {
-  return async (...args) => {
+): (...args: Parameters<H>) => Promise<Awaited<ReturnType<H>>> {
+  return async (...args): Promise<Awaited<ReturnType<H>>> => {
     const request: unknown = args[0];
     // Next always passes the request; direct calls in unit tests may not.
-    if (!(request instanceof Request)) return handler(...args);
+    if (!(request instanceof Request)) return (await handler(...args)) as Awaited<ReturnType<H>>;
     const ctx = requestContextFields(request.headers);
     const path = new URL(request.url).pathname;
     const start = performance.now();
-    return runWithStore(ctx, async (store) => {
+    return await runWithStore(ctx, async (store): Promise<Awaited<ReturnType<H>>> => {
       const summary = (status: number, err: unknown) =>
         logHttpRequest(
           log,
@@ -72,9 +72,9 @@ export function withLogging<H extends RouteHandler>(
           opts,
         );
       try {
-        const res = await handler(...args);
-        summary(res.status, store.error);
-        trySetHeader(res, "x-request-id", ctx.request_id);
+        const res = (await handler(...args)) as Awaited<ReturnType<H>>;
+        summary((res as Response).status, store.error);
+        trySetHeader(res as Response, "x-request-id", ctx.request_id);
         return res;
       } catch (caught) {
         const control = nextControlStatus(caught);
