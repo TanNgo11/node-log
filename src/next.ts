@@ -3,7 +3,7 @@ import { isErrorLike, isLogged, markLogged } from "./error";
 import { logHttpRequest, requestContextFields, type HeaderSource, type HttpLogOptions } from "./http";
 import type { Logger } from "./logger";
 import type { Fields } from "./normalize";
-import { installProcessHandlers, logStartup } from "./process";
+import { installProcessHandlers, logProcessWarnings, logStartup } from "./process";
 
 export interface WithLoggingOptions extends HttpLogOptions {
   /** Route template, e.g. "/api/orders/[id]". Left empty when not given. */
@@ -138,6 +138,7 @@ export function registerNext(log: Logger, fields?: Fields): void {
   if (process.env.NEXT_RUNTIME && process.env.NEXT_RUNTIME !== "nodejs") return;
   // Next keeps serving after an unhandled rejection, so do not exit.
   installProcessHandlers(log, { exitOnCrash: false });
+  logProcessWarnings(log);
   logStartup(log, { port: process.env.PORT ? Number(process.env.PORT) : undefined, ...fields });
 }
 

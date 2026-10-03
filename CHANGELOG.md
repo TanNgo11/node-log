@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.4
+
+Added:
+- `logProcessWarnings(log)`: logs Node process warnings (for example pg's "client.query() while
+  executing" deprecation) as `process.warning` lines. Their `err_stack` points at the code
+  that triggered the warning. `registerNext` installs it.
+
 ## 0.4.3
 
 Fixed:

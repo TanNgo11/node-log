@@ -66,3 +66,34 @@ describe("installProcessHandlers", () => {
     for (const l of process.listeners("unhandledRejection")) if (!rejectionBefore.includes(l)) process.off("unhandledRejection", l);
   });
 });
+
+describe("logProcessWarnings", () => {
+  it("logs Node process warnings as process.warning with the emit-site stack", async () => {
+    const { logProcessWarnings } = await import("../src/process");
+    const { log, lines } = capture();
+    const before = process.listeners("warning");
+    logProcessWarnings(log);
+    const warning = Object.assign(new Error("Calling client.query() when the client is already executing a query is deprecated"), {
+      name: "DeprecationWarning",
+      code: "DEP_PG_QUERY",
+    });
+    process.emit("warning", warning);
+    for (const l of process.listeners("warning")) if (!before.includes(l)) process.off("warning", l);
+    expect(lines()[0]).toMatchObject({
+      level: "warn",
+      event: "process.warning",
+      message: "process warning",
+      err_type: "DeprecationWarning",
+      err_code: "DEP_PG_QUERY",
+    });
+    expect(typeof lines()[0]!.err_stack).toBe("string");
+  });
+  it("installs its listener only once", async () => {
+    const { logProcessWarnings } = await import("../src/process");
+    const { log } = capture();
+    const before = process.listenerCount("warning");
+    logProcessWarnings(log);
+    logProcessWarnings(log);
+    expect(process.listenerCount("warning")).toBeLessThanOrEqual(before + 1);
+  });
+});

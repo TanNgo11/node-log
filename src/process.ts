@@ -59,3 +59,18 @@ export function installProcessHandlers(log: Logger, opts: ProcessHandlerOptions 
   process.on("uncaughtException", h.onUncaught);
   process.on("unhandledRejection", h.onRejection);
 }
+
+const warningState = globalSingleton("warnings", () => ({ installed: false }));
+
+/**
+ * Logs Node process warnings (deprecations, MaxListeners...) as `process.warning` lines whose
+ * err_stack points at the code that triggered them. Node still prints its own stderr copy
+ * unless the process runs with --no-warnings (NODE_OPTIONS=--no-warnings).
+ */
+export function logProcessWarnings(log: Logger): void {
+  if (warningState.installed || typeof process === "undefined" || typeof process.on !== "function") return;
+  warningState.installed = true;
+  process.on("warning", (warning: Error) => {
+    log.warn("process warning", { event: "process.warning", err: warning });
+  });
+}

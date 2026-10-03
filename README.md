@@ -127,6 +127,7 @@ await runJob(log, { job_name: "sync_stock", job_id: id }, () => syncStock()); //
 await queue.add("send_invoice", jobData({ invoice_id }));             // carries the current request_id into the job
 
 installProcessHandlers(log); // app.crashed on uncaught errors, then exit(1) after 1s so Sentry & co. can flush
+logProcessWarnings(log);     // Node warnings (deprecations...) as process.warning with the call-site stack
 logStartup(log, { port: 3000 }); // app.started
 
 process.once("SIGTERM", async () => {
@@ -221,7 +222,7 @@ import { nextConsoleSkip, nextOnRequestError, registerNext } from "@tanngo11/log
 import { log } from "@/lib/log";
 
 export function register() {
-  registerNext(log); // app.started + crash logging (Next keeps serving, so no exit)
+  registerNext(log); // app.started, crash and process-warning logging (Next keeps serving, so no exit)
   // Next prints render errors with console.error before onRequestError logs them:
   // nextConsoleSkip drops that copy so each error is one line.
   patchConsole(log, { skip: nextConsoleSkip });
@@ -307,6 +308,11 @@ return [
   data export/import commands set it to `error`.
 
 Tested against the versions Strapi 5.51 uses: Koa 2, `@koa/router` 12 and winston 3.10.
+
+For Strapi, call `logProcessWarnings(log)` in `register()` of `src/index.ts`.
+
+Node also prints its own text copy of each warning to stderr. Run with
+`NODE_OPTIONS=--no-warnings` to keep only the JSON line.
 
 ## Prisma (5 and 6)
 

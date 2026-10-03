@@ -78,6 +78,7 @@ System events shared by all services:
 | `app.stopping` | info | the app starts its own graceful shutdown |
 | `app.crashed` | fatal | uncaught error, process exits |
 | `app.unhandled_error` | error | uncaught error, process keeps running |
+| `process.warning` | warn | a Node process warning (deprecation...); `err_stack` shows the call site |
 | `config.invalid` | fatal | missing or invalid config at startup (never log the value) |
 | `http.request` | by status | one summary line per inbound request |
 | `http.outbound` | warn | an outbound call failed (network error or 5xx) or was slow (≥ 1 s) |
