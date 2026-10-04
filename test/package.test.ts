@@ -28,3 +28,25 @@ describe("built package", () => {
     });
   });
 });
+
+describe("legacy TypeScript resolution (moduleResolution: node)", () => {
+  it("declares main, types and typesVersions for every export subpath", async () => {
+    const { readFileSync, existsSync } = await import("node:fs");
+    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+      main?: string;
+      types?: string;
+      exports: Record<string, unknown>;
+      typesVersions?: Record<string, Record<string, string[]>>;
+    };
+    const root = new URL("../", import.meta.url);
+    expect(pkg.main).toBe("./dist/index.cjs");
+    expect(pkg.types).toBe("./dist/index.d.ts");
+    expect(existsSync(new URL(pkg.types!, root))).toBe(true);
+    const subpaths = Object.keys(pkg.exports).filter((k) => k !== "." && k !== "./package.json").map((k) => k.slice(2));
+    for (const sub of subpaths) {
+      const target = pkg.typesVersions?.["*"]?.[sub]?.[0];
+      expect(target, sub).toBeDefined();
+      expect(existsSync(new URL(target!, root)), `${sub} -> ${target}`).toBe(true);
+    }
+  });
+});

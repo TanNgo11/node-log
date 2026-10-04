@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.6
+
+Fixed:
+- Types resolve for projects using `"moduleResolution": "node"` (node10), such as Strapi
+  projects with `"module": "CommonJS"`. That mode ignores `exports`, so the package now also
+  declares `main`, `module`, `types` and `typesVersions` for every subpath.
+
 ## 0.4.5
 
 Changed:

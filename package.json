@@ -1,6 +1,6 @@
 {
   "name": "@tanngo11/log",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Structured JSON logging for Node services, implementing log contract v1",
   "license": "MIT",
   "repository": {
@@ -22,6 +22,9 @@
     "CHANGELOG.md",
     "CONTRACT.md"
   ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "import": {
@@ -150,5 +153,33 @@
     "typescript": "^5.9.3",
     "vitest": "^3.2.7",
     "winston": "^3.10.0"
+  },
+  "typesVersions": {
+    "*": {
+      "express": [
+        "./dist/express.d.ts"
+      ],
+      "fastify": [
+        "./dist/fastify.d.ts"
+      ],
+      "nest": [
+        "./dist/nest.d.ts"
+      ],
+      "next": [
+        "./dist/next.d.ts"
+      ],
+      "next/edge": [
+        "./dist/next-edge.d.ts"
+      ],
+      "bullmq": [
+        "./dist/bullmq.d.ts"
+      ],
+      "prisma": [
+        "./dist/prisma.d.ts"
+      ],
+      "strapi": [
+        "./dist/strapi.d.ts"
+      ]
+    }
   }
 }
