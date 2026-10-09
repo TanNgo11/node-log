@@ -321,9 +321,10 @@ register({ strapi }) {
 }
 ```
 
-- `logProcessWarnings` removes Node's own stderr copy of each warning and logs each distinct
-  warning once per process (pg repeats its deprecation on every query). Pass
-  `{ replaceDefault: false }` to keep Node's printer.
+- `logProcessWarnings` removes Node's own stderr copy of each warning. A repeated warning (pg
+  repeats its deprecation on every query) is written at most once an hour (`repeatWindowMs`);
+  the next line's `suppressed_count` says how many repeats were dropped since the previous one.
+  Pass `{ replaceDefault: false }` to keep Node's printer.
 - `strapiServerErrors` replaces Koa's default error printer. Koa prints errors that never reach a
   middleware (a client that hung up mid-upload, an HTTP parse error) with `console.error`, which
   becomes one plain stderr line per stack frame. They become one `http.server_error` line with

@@ -116,7 +116,7 @@ describe("logProcessWarnings stack depth", () => {
 });
 
 describe("logProcessWarnings defaults", () => {
-  it("removes Node's stderr printer and logs each distinct warning once", async () => {
+  it("removes Node's stderr printer and throttles repeats, keeping their count", async () => {
     const { logProcessWarnings } = await import("../src/process");
     const state = (globalThis as Record<symbol, { installed: boolean }>)[Symbol.for("@tanngo11/log.warnings")];
     if (state) state.installed = false;
@@ -124,13 +124,21 @@ describe("logProcessWarnings defaults", () => {
     const printer = function onWarning() {};
     process.on("warning", printer);
     const { log, lines } = capture();
-    logProcessWarnings(log);
+    let clock = 0;
+    logProcessWarnings(log, { repeatWindowMs: 1000, now: () => clock });
     expect(process.listeners("warning")).not.toContain(printer);
     const emit = (message: string) => process.emit("warning", Object.assign(new Error(message), { name: "DeprecationWarning" }));
     emit("pg query while executing");
     emit("pg query while executing");
+    emit("pg query while executing");
     emit("other deprecation");
+    clock = 1000;
+    emit("pg query while executing");
     for (const l of process.listeners("warning")) if (!before.includes(l)) process.off("warning", l);
-    expect(lines().map((l) => l.err_message)).toEqual(["pg query while executing", "other deprecation"]);
+    expect(lines().map((l) => [l.err_message, l.suppressed_count])).toEqual([
+      ["pg query while executing", undefined],
+      ["other deprecation", undefined],
+      ["pg query while executing", 2],
+    ]);
   });
 });

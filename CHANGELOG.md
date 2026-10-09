@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.1
+
+Changed:
+- `logProcessWarnings` throttles a repeated warning instead of logging it only once per process:
+  at most one line per hour (option `repeatWindowMs`), carrying `suppressed_count`, the repeats
+  dropped since the previous line. With 0.5.0 a recurring pg deprecation looked like a one-off
+  after each deploy.
+
 ## 0.5.0
 
 Added:

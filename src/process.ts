@@ -77,14 +77,20 @@ export interface ProcessWarningOptions {
    * "(node:1) Warning: ..." and "(Use `node --trace-deprecation ...`...)". Default true.
    */
   replaceDefault?: boolean;
+  /**
+   * A repeated warning is written at most once per window (default 1 hour). The next line carries
+   * `suppressed_count`, the repeats dropped since the previous line, so the frequency stays visible.
+   */
+  repeatWindowMs?: number;
+  now?: () => number;
 }
 
-// Some libraries (pg) emit the same warning on every occurrence; one line per process is enough.
-const MAX_SEEN_WARNINGS = 200;
+// Distinct warnings tracked; past this a new kind is logged every time instead of throttled.
+const MAX_TRACKED_WARNINGS = 200;
 
 /**
  * Logs Node process warnings (deprecations, MaxListeners...) as `process.warning` lines whose
- * err_stack points at the code that triggered them. Each distinct warning is logged once.
+ * err_stack points at the code that triggered them. Repeats are throttled (see repeatWindowMs).
  * Also raises Error.stackTraceLimit (default 30) so the stack reaches past framework frames.
  */
 export function logProcessWarnings(log: Logger, opts: ProcessWarningOptions = {}): void {
@@ -94,11 +100,23 @@ export function logProcessWarnings(log: Logger, opts: ProcessWarningOptions = {}
   if (opts.replaceDefault ?? true) {
     for (const l of process.listeners("warning")) if (l.name === "onWarning") process.off("warning", l);
   }
-  const seen = new Set<string>();
+  const windowMs = opts.repeatWindowMs ?? 60 * 60 * 1000;
+  const now = opts.now ?? Date.now;
+  const tracked = new Map<string, { loggedAt: number; suppressed: number }>();
   process.on("warning", (warning: Error) => {
     const key = `${warning?.name}:${(warning as { code?: unknown })?.code ?? ""}:${warning?.message}`;
-    if (seen.has(key)) return;
-    if (seen.size < MAX_SEEN_WARNINGS) seen.add(key);
-    log.warn("process warning", { event: "process.warning", err: warning });
+    const t = now();
+    const entry = tracked.get(key);
+    if (entry && t - entry.loggedAt < windowMs) {
+      entry.suppressed += 1;
+      return;
+    }
+    if (entry) tracked.set(key, { loggedAt: t, suppressed: 0 });
+    else if (tracked.size < MAX_TRACKED_WARNINGS) tracked.set(key, { loggedAt: t, suppressed: 0 });
+    log.warn("process warning", {
+      event: "process.warning",
+      suppressed_count: entry ? entry.suppressed : undefined,
+      err: warning,
+    });
   });
 }
