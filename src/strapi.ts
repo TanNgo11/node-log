@@ -105,6 +105,54 @@ export function strapiErrorCapture(): KoaMiddleware {
   };
 }
 
+/** The part of a Koa application (strapi.server.app) strapiServerErrors uses. */
+export interface KoaAppLike {
+  on(event: "error", listener: (err: unknown, ctx?: KoaContextLike) => void): unknown;
+}
+
+/**
+ * Replaces Koa's default app.onerror, which prints the stack with console.error as many plain
+ * stderr lines (stream errors such as "aborted" or "Parse Error" that never reach a middleware).
+ * Writes one `http.server_error` line instead. Call it in register() of src/index.ts, before the
+ * first request: `strapiServerErrors(strapi.server.app, log)`.
+ */
+export function strapiServerErrors(app: KoaAppLike, log: Logger, opts: { stateKey?: string } = {}): void {
+  const stateKey = opts.stateKey ?? "requestId";
+  // Koa installs its printer only when the app has no error listener of its own.
+  app.on("error", (err, ctx) => {
+    if (isLogged(err)) return;
+    const e = err as { status?: unknown; expose?: unknown } | null;
+    // Koa's printer skips these too: 404s and client errors already on the http.request line.
+    if (e?.status === 404 || e?.expose === true) return;
+    const status = typeof e?.status === "number" ? e.status : 500;
+    const fields: Fields = { event: "http.server_error", err };
+    const client = isClientDisconnect(err);
+    if (client) fields.client_disconnect = true;
+    if (ctx) {
+      const requestId = ctx.state?.[stateKey];
+      if (typeof requestId === "string" && currentStore()?.fields.request_id === undefined) fields.request_id = requestId;
+      fields.http_method = ctx.method;
+      fields.http_path = ctx.url;
+    }
+    markLogged(err);
+    log[status >= 500 && !client ? "error" : "warn"]("http server error", fields);
+  });
+}
+
+// The client hung up or sent a malformed request: worth a warn, not an error on our side.
+function isClientDisconnect(err: unknown): boolean {
+  const e = err as { code?: unknown; message?: unknown } | null;
+  const code = typeof e?.code === "string" ? e.code : "";
+  return (
+    code === "ECONNRESET" ||
+    code === "ECONNABORTED" ||
+    code === "EPIPE" ||
+    code === "ERR_STREAM_PREMATURE_CLOSE" ||
+    code.startsWith("HPE_") ||
+    e?.message === "aborted"
+  );
+}
+
 const LEVELS: Record<string, Level> = {
   error: "error",
   warn: "warn",

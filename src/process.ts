@@ -70,17 +70,35 @@ export function raiseStackTraceLimit(limit: number): void {
   if (Error.stackTraceLimit < limit) Error.stackTraceLimit = limit;
 }
 
+export interface ProcessWarningOptions {
+  stackTraceLimit?: number;
+  /**
+   * Remove Node's own stderr printer, so a warning is one JSON line instead of that line plus
+   * "(node:1) Warning: ..." and "(Use `node --trace-deprecation ...`...)". Default true.
+   */
+  replaceDefault?: boolean;
+}
+
+// Some libraries (pg) emit the same warning on every occurrence; one line per process is enough.
+const MAX_SEEN_WARNINGS = 200;
+
 /**
  * Logs Node process warnings (deprecations, MaxListeners...) as `process.warning` lines whose
- * err_stack points at the code that triggered them. Node still prints its own stderr copy
- * unless the process runs with --no-warnings (NODE_OPTIONS=--no-warnings).
+ * err_stack points at the code that triggered them. Each distinct warning is logged once.
  * Also raises Error.stackTraceLimit (default 30) so the stack reaches past framework frames.
  */
-export function logProcessWarnings(log: Logger, opts: { stackTraceLimit?: number } = {}): void {
+export function logProcessWarnings(log: Logger, opts: ProcessWarningOptions = {}): void {
   if (warningState.installed || typeof process === "undefined" || typeof process.on !== "function") return;
   warningState.installed = true;
   raiseStackTraceLimit(opts.stackTraceLimit ?? 30);
+  if (opts.replaceDefault ?? true) {
+    for (const l of process.listeners("warning")) if (l.name === "onWarning") process.off("warning", l);
+  }
+  const seen = new Set<string>();
   process.on("warning", (warning: Error) => {
+    const key = `${warning?.name}:${(warning as { code?: unknown })?.code ?? ""}:${warning?.message}`;
+    if (seen.has(key)) return;
+    if (seen.size < MAX_SEEN_WARNINGS) seen.add(key);
     log.warn("process warning", { event: "process.warning", err: warning });
   });
 }

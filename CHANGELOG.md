@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.0
+
+Added:
+- `strapiServerErrors(strapi.server.app, log)` (`/strapi`): replaces Koa's default error printer.
+  In production, "aborted" and "Parse Error" stacks reached the logs as one plain stderr line per
+  frame, with the frames at `info`. They are now one `http.server_error` line. Client
+  disconnects are `warn` with `client_disconnect: true`.
+
+Changed:
+- `logProcessWarnings` removes Node's own stderr printer (option `replaceDefault`, default true),
+  so a warning is one JSON line instead of three. The "(Use `node --trace-deprecation ...`)"
+  line was ingested at level `trace`.
+- `logProcessWarnings` logs each distinct warning once per process. pg repeated the same
+  deprecation many times a day.
+- Health checks are skipped under a prefix too (`/api/v1/health`). They were 27% of a Strapi
+  API's `http.request` lines.
+- Skipped paths are logged again when they fail with a 5xx, so a failing health check is visible.
+
 ## 0.4.6
 
 Fixed:

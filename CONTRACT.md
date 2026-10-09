@@ -81,6 +81,7 @@ System events shared by all services:
 | `process.warning` | warn | a Node process warning (deprecation...); `err_stack` shows the call site |
 | `config.invalid` | fatal | missing or invalid config at startup (never log the value) |
 | `http.request` | by status | one summary line per inbound request |
+| `http.server_error` | error, or warn for a client disconnect | an error the HTTP framework raised outside any request middleware (stream aborted, parse error) |
 | `http.outbound` | warn | an outbound call failed (network error or 5xx) or was slow (≥ 1 s) |
 | `db.slow_query` | warn | a query took longer than the threshold (default 500 ms) |
 | `db.error` | error | a database error that no upper layer handles |
@@ -96,7 +97,8 @@ System events shared by all services:
 **Required:**
 - `app.started` and `app.stopping`.
 - One `http.request` line per request: 5xx at `error`, 4xx at `warn`, otherwise `info`. Skip
-  health checks, static assets and `OPTIONS`.
+  health checks (also under a prefix such as `/api/v1/health`), static assets and `OPTIONS`,
+  unless they fail with a 5xx.
 - **Log each error once, at the boundary.** Code that rethrows does not log. A failed request
   produces one `error` line: its `http.request` line, carrying `err_*`.
 - `job.completed` / `job.failed` with `job_name`, `job_id` and `duration_ms`.

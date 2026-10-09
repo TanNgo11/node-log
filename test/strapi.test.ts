@@ -2,8 +2,14 @@ import Router from "@koa/router";
 import Koa from "koa";
 import type { AddressInfo } from "node:net";
 import winston from "winston";
-import { afterEach, describe, expect, it } from "vitest";
-import { strapiErrorCapture, strapiLoggerConfig, strapiRequestLogger, type StrapiRequestLoggerOptions } from "../src/strapi";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  strapiErrorCapture,
+  strapiLoggerConfig,
+  strapiRequestLogger,
+  strapiServerErrors,
+  type StrapiRequestLoggerOptions,
+} from "../src/strapi";
 import { capture } from "./helpers";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -173,5 +179,45 @@ describe("strapiLoggerConfig level", () => {
     strapiLog.warn("skipped file");
     strapiLog.error("export failed");
     expect(lines().map((l) => l.message)).toEqual(["export failed"]);
+  });
+});
+
+describe("strapiServerErrors", () => {
+  it("replaces Koa's console.error printer with one http.server_error line", async () => {
+    const cap = capture();
+    const app = new Koa();
+    strapiServerErrors(app, cap.log);
+    app.use(async (ctx) => {
+      ctx.state.requestId = "rid-1";
+      ctx.onerror(Object.assign(new Error("aborted"), { code: "ECONNABORTED" }));
+    });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const server = app.listen(0);
+    close = () => server.close();
+    const { port } = server.address() as AddressInfo;
+    await fetch(`http://127.0.0.1:${port}/api/upload?token=x`).catch(() => undefined);
+    consoleError.mockRestore();
+    expect(consoleError).not.toHaveBeenCalled();
+    expect(cap.lines()).toMatchObject([
+      {
+        level: "warn",
+        event: "http.server_error",
+        message: "http server error",
+        err_message: "aborted",
+        err_code: "ECONNABORTED",
+        client_disconnect: true,
+        request_id: "rid-1",
+        http_method: "GET",
+        http_path: "/api/upload",
+      },
+    ]);
+  });
+  it("logs server-side errors at error and skips exposed client errors", () => {
+    const cap = capture();
+    const app = new Koa();
+    strapiServerErrors(app, cap.log);
+    app.emit("error", new Error("stream broke"));
+    app.emit("error", Object.assign(new Error("bad input"), { status: 400, expose: true }));
+    expect(cap.lines()).toMatchObject([{ level: "error", event: "http.server_error", err_message: "stream broke" }]);
   });
 });

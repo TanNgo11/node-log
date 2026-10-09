@@ -192,12 +192,12 @@ describe("withLogging keeps the handler signature", () => {
   it("returns a function with the same parameters as the handler", async () => {
     const { log, lines } = capture();
     // Zero-parameter handlers are valid Next route handlers; Next still passes the request.
-    const GET = withLogging(log, async () => Response.json({ ok: true }), { route: "/api/health" });
+    const GET = withLogging(log, async () => Response.json({ ok: true }), { route: "/api/status" });
     const typed: () => Promise<Response> = GET;
     expect(typeof typed).toBe("function");
     const runtime = GET as unknown as (request: Request) => Promise<Response>;
-    await runtime(req("/api/health"));
-    expect(lines()[0]).toMatchObject({ http_route: "/api/health", http_status: 200 });
+    await runtime(req("/api/status"));
+    expect(lines()[0]).toMatchObject({ http_route: "/api/status", http_status: 200 });
   });
   it("calls the handler without logging when no request is passed (direct calls in tests)", async () => {
     const { log, lines } = capture();

@@ -309,10 +309,26 @@ return [
 
 Tested against the versions Strapi 5.51 uses: Koa 2, `@koa/router` 12 and winston 3.10.
 
-For Strapi, call `logProcessWarnings(log)` in `register()` of `src/index.ts`.
+In `register()` of `src/index.ts`:
 
-Node also prints its own text copy of each warning to stderr. Run with
-`NODE_OPTIONS=--no-warnings` to keep only the JSON line.
+```ts
+import { logProcessWarnings } from "@tanngo11/log";
+import { strapiServerErrors } from "@tanngo11/log/strapi";
+
+register({ strapi }) {
+  logProcessWarnings(log);
+  strapiServerErrors(strapi.server.app, log);
+}
+```
+
+- `logProcessWarnings` removes Node's own stderr copy of each warning and logs each distinct
+  warning once per process (pg repeats its deprecation on every query). Pass
+  `{ replaceDefault: false }` to keep Node's printer.
+- `strapiServerErrors` replaces Koa's default error printer. Koa prints errors that never reach a
+  middleware (a client that hung up mid-upload, an HTTP parse error) with `console.error`, which
+  becomes one plain stderr line per stack frame. They become one `http.server_error` line with
+  `err_stack`, `http_method`, `http_path` and `request_id`. Client disconnects (`aborted`,
+  `ECONNRESET`, `HPE_*`...) are `warn` with `client_disconnect: true`; anything else is `error`.
 
 ## Prisma (5 and 6)
 

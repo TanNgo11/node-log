@@ -86,6 +86,8 @@ describe("logHttpRequest", () => {
     expect(shouldSkip("OPTIONS", "/orders")).toBe(true);
     expect(shouldSkip("GET", "/health")).toBe(true);
     expect(shouldSkip("GET", "/healthz?x=1")).toBe(true);
+    expect(shouldSkip("GET", "/api/v1/health")).toBe(true);
+    expect(shouldSkip("GET", "/api/healthcare")).toBe(false);
     expect(shouldSkip("GET", "/_next/static/chunks/a.js")).toBe(true);
     expect(shouldSkip("GET", "/favicon.ico")).toBe(true);
     expect(shouldSkip("GET", "/orders")).toBe(false);
@@ -93,5 +95,7 @@ describe("logHttpRequest", () => {
     const { log, lines } = capture();
     logHttpRequest(log, { method: "GET", path: "/health", status: 200 });
     expect(lines()).toHaveLength(0);
+    logHttpRequest(log, { method: "GET", path: "/health", status: 503 });
+    expect(lines()).toMatchObject([{ level: "error", http_status: 503 }]);
   });
 });

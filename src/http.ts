@@ -34,7 +34,8 @@ export function propagationHeaders(): Record<string, string> {
 }
 
 export const DEFAULT_SKIP_PATHS: (string | RegExp)[] = [
-  /^\/(health|healthz|ready|readyz|livez)\/?$/,
+  // Also under a prefix such as /api/v1/health.
+  /(^|\/)(health|healthz|ready|readyz|livez)\/?$/,
   "/favicon.ico",
   /^\/_next\/static\//,
 ];
@@ -59,9 +60,10 @@ export function shouldSkip(method: string, path: string, skipPaths: (string | Re
   return skipPaths.some((s) => (typeof s === "string" ? p === s : s.test(p)));
 }
 
-// Writes the one `http.request` summary line for an inbound request.
+// Writes the one `http.request` summary line for an inbound request. Skipped paths are still
+// logged when they fail with a 5xx, so a failing health check stays visible.
 export function logHttpRequest(log: Logger, info: HttpRequestInfo, opts: HttpLogOptions = {}): void {
-  if (shouldSkip(info.method, info.path, opts.skipPaths)) return;
+  if (info.status < 500 && shouldSkip(info.method, info.path, opts.skipPaths)) return;
   const level = info.status >= 500 ? "error" : info.status >= 400 ? "warn" : "info";
   const path = stripUrl(info.path);
   const errFields: Fields = {};
