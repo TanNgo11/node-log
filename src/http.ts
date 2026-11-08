@@ -1,5 +1,5 @@
 import { getContext } from "./context";
-import { isClientDisconnect, markLogged, serializeError } from "./error";
+import { markLogged, serializeError } from "./error";
 import type { Logger } from "./logger";
 import { stripUrl, type Fields } from "./normalize";
 import { parseTraceparent, resolveRequestId } from "./request-id";
@@ -64,16 +64,15 @@ export function shouldSkip(method: string, path: string, skipPaths: (string | Re
 // logged when they fail with a 5xx, so a failing health check stays visible.
 export function logHttpRequest(log: Logger, info: HttpRequestInfo, opts: HttpLogOptions = {}): void {
   if (info.status < 500 && shouldSkip(info.method, info.path, opts.skipPaths)) return;
-  const hasErr = info.err !== undefined && info.err !== null;
-  // A client that hung up mid-request is not a server failure, whatever status the app set.
-  const clientGone = hasErr && isClientDisconnect(info.err);
-  const level = info.status >= 500 && !clientGone ? "error" : info.status >= 400 ? "warn" : "info";
+  // The level follows the status only. An error's shape cannot tell a client hang-up apart:
+  // knex's pool (tarn) rejects in-flight queries with Error("aborted") when it is destroyed on
+  // shutdown, and a pg or outbound socket reset is ECONNRESET too. Both are server-side failures.
+  const level = info.status >= 500 ? "error" : info.status >= 400 ? "warn" : "info";
   const path = stripUrl(info.path);
   const errFields: Fields = {};
-  if (hasErr) {
+  if (info.err !== undefined && info.err !== null) {
     Object.assign(errFields, serializeError(info.err));
-    if (info.status < 500 || clientGone) delete errFields.err_stack;
-    if (clientGone) errFields.client_disconnect = true;
+    if (info.status < 500) delete errFields.err_stack;
     markLogged(info.err);
   }
   // Route templates keep the message bounded; the raw path would make one message per URL.

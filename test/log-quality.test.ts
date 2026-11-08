@@ -72,20 +72,14 @@ describe("database errors", () => {
   });
 });
 
-describe("client disconnects on http.request", () => {
-  it("logs an aborted request as warn with client_disconnect", () => {
+describe("http.request level", () => {
+  it("keeps a 500 at error even when the error looks like a disconnect", () => {
+    // knex's pool rejects in-flight queries with Error("aborted") when it is destroyed.
     const { log, lines } = capture();
     const err = new Error("aborted");
     expect(isClientDisconnect(err)).toBe(true);
     logHttpRequest(log, { method: "GET", route: "/api/x", path: "/api/x", status: 500, err });
-    expect(lines()[0]).toMatchObject({ level: "warn", http_status: 500, err_message: "aborted", client_disconnect: true });
-    expect(lines()[0]!.err_stack).toBeUndefined();
-  });
-
-  it("keeps a real 500 at error", () => {
-    const { log, lines } = capture();
-    logHttpRequest(log, { method: "GET", path: "/x", status: 500, err: new Error("boom") });
-    expect(lines()[0]).toMatchObject({ level: "error" });
+    expect(lines()[0]).toMatchObject({ level: "error", http_status: 500, err_message: "aborted" });
     expect(lines()[0]!.client_disconnect).toBeUndefined();
   });
 });

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.2
+
+Fixed:
+- Reverts the 0.6.0 change that made an `http.request` line `warn` with `client_disconnect` when
+  its recorded error looked like a disconnect. The error's shape cannot tell: knex's pool (tarn)
+  rejects in-flight queries with `Error("aborted")` when it is destroyed on shutdown, and pg or
+  outbound socket resets are `ECONNRESET` too. Those are server failures and stay `error`.
+  `strapiServerErrors`, which only sees inbound socket errors, still marks client disconnects.
+
 ## 0.6.1
 
 Changed:

@@ -79,7 +79,11 @@ export function stripSql(message: string): string {
   return at === -1 ? message : message.slice(at + 3);
 }
 
-// The client hung up or sent a malformed request: worth a warn, not an error on our side.
+/**
+ * For errors Koa emits on the inbound socket (strapiServerErrors): the client hung up or sent a
+ * malformed request. Not valid for errors in general: knex's pool rejects with Error("aborted")
+ * when it is destroyed, and pg or outbound sockets reset with ECONNRESET.
+ */
 export function isClientDisconnect(err: unknown): boolean {
   const e = err as { code?: unknown; message?: unknown } | null;
   const code = typeof e?.code === "string" ? e.code : "";
