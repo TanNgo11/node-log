@@ -34,7 +34,7 @@ stream, nested fields flattened with `_`) → MCP for AI agents.
 | Inbound HTTP | `http_method`, `http_route` (template, e.g. `/orders/:id`), `http_path` (no query string), `http_status`, `duration_ms` |
 | Outbound HTTP | `peer_service`, `http_method`, `http_url` (no query string or credentials), `http_status`, `duration_ms` |
 | Error | `err_type`, `err_message`, `err_code` (string), `err_stack`, `err_cause` (cause chain joined with ` <- `, max 5) |
-| Database | `db_system`, `db_operation`, `db_table`, `db_rows`, `duration_ms`, `db_statement` (parameterized only) |
+| Database | `db_system`, `db_operation`, `db_table`, `db_rows`, `duration_ms`, `db_statement` (parameterized only), `db_constraint` |
 
 Naming rules for domain fields:
 - ids: `<entity>_id`;

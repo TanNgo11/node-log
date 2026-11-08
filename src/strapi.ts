@@ -1,6 +1,6 @@
 import { Writable } from "node:stream";
 import { currentStore, recordErrorIn, runWithStore } from "./context";
-import { isErrorLike, isLogged, markLogged } from "./error";
+import { isClientDisconnect, isErrorLike, isLogged, markLogged } from "./error";
 import { logHttpRequest, newRequestId, parseTraceparent, REQUEST_ID_RE, type HttpLogOptions } from "./http";
 import type { Level } from "./levels";
 import type { Logger } from "./logger";
@@ -137,20 +137,6 @@ export function strapiServerErrors(app: KoaAppLike, log: Logger, opts: { stateKe
     markLogged(err);
     log[status >= 500 && !client ? "error" : "warn"]("http server error", fields);
   });
-}
-
-// The client hung up or sent a malformed request: worth a warn, not an error on our side.
-function isClientDisconnect(err: unknown): boolean {
-  const e = err as { code?: unknown; message?: unknown } | null;
-  const code = typeof e?.code === "string" ? e.code : "";
-  return (
-    code === "ECONNRESET" ||
-    code === "ECONNABORTED" ||
-    code === "EPIPE" ||
-    code === "ERR_STREAM_PREMATURE_CLOSE" ||
-    code.startsWith("HPE_") ||
-    e?.message === "aborted"
-  );
 }
 
 const LEVELS: Record<string, Level> = {

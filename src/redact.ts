@@ -11,8 +11,11 @@ export const DEFAULT_REDACT_KEYS = [
 
 /** Opt-in value patterns for `redactValues`. Not on by default: they can hit ordinary numbers. */
 export const REDACT_PATTERNS = {
-  /** Vietnamese mobile numbers: 0912345678, +84912345678, 84912345678. */
-  phoneVN: /(?<![\d+])(?:\+?84|0)[35789]\d{8}(?!\d)/g,
+  /**
+   * Vietnamese mobile numbers: 0912345678, +84912345678, 84912345678. Letters on either side
+   * rule a match out, so hex ids (a UUID segment such as 0912345678e0) are left alone.
+   */
+  phoneVN: /(?<![\dA-Za-z+])(?:\+?84|0)[35789]\d{8}(?![\dA-Za-z])/g,
   /** Visa, Mastercard, Amex, Discover-like card numbers, with optional spaces or dashes. */
   paymentCard: /(?<!\d)(?:4\d{3}|5[1-5]\d{2}|2[2-7]\d{2}|3[47]\d{2}|6(?:011|5\d{2}))(?:[ -]?\d{4}){2}[ -]?\d{1,4}(?!\d)/g,
   /** IPv4 addresses. */

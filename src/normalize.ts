@@ -86,8 +86,17 @@ function flattenInto(out: LogRecord, prefix: string, obj: Fields, depth: number,
   }
 }
 
+// Correlation ids are opaque tokens: value patterns such as phoneVN can match inside a hex
+// segment and break the join between services, so a well-formed id is never scrubbed.
+const ID_VALUE_RE = /^[A-Za-z0-9._:-]{1,128}$/;
+
+function isIdKey(key: string): boolean {
+  return key === "request_id" || key === "trace_id" || key === "span_id" || key.endsWith("_request_id");
+}
+
 function finalize(key: string, value: Primitive, opts: NormalizeOptions): Primitive {
   if (typeof value !== "string") return value;
+  if (isIdKey(key) && ID_VALUE_RE.test(value)) return value;
   const v = opts.redactor.scrub(isUrlKey(key) ? stripUrl(value) : value);
   return truncate(v, key === "err_stack" ? MAX_STACK : MAX_STRING);
 }

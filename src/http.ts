@@ -1,5 +1,5 @@
 import { getContext } from "./context";
-import { markLogged, serializeError } from "./error";
+import { isClientDisconnect, markLogged, serializeError } from "./error";
 import type { Logger } from "./logger";
 import { stripUrl, type Fields } from "./normalize";
 import { parseTraceparent, resolveRequestId } from "./request-id";
@@ -64,12 +64,16 @@ export function shouldSkip(method: string, path: string, skipPaths: (string | Re
 // logged when they fail with a 5xx, so a failing health check stays visible.
 export function logHttpRequest(log: Logger, info: HttpRequestInfo, opts: HttpLogOptions = {}): void {
   if (info.status < 500 && shouldSkip(info.method, info.path, opts.skipPaths)) return;
-  const level = info.status >= 500 ? "error" : info.status >= 400 ? "warn" : "info";
+  const hasErr = info.err !== undefined && info.err !== null;
+  // A client that hung up mid-request is not a server failure, whatever status the app set.
+  const clientGone = hasErr && isClientDisconnect(info.err);
+  const level = info.status >= 500 && !clientGone ? "error" : info.status >= 400 ? "warn" : "info";
   const path = stripUrl(info.path);
   const errFields: Fields = {};
-  if (info.err !== undefined && info.err !== null) {
+  if (hasErr) {
     Object.assign(errFields, serializeError(info.err));
-    if (info.status < 500) delete errFields.err_stack;
+    if (info.status < 500 || clientGone) delete errFields.err_stack;
+    if (clientGone) errFields.client_disconnect = true;
     markLogged(info.err);
   }
   // Route templates keep the message bounded; the raw path would make one message per URL.

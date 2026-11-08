@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.6.0
+
+Added:
+- `knexLogging(knex, log)`: `db.slow_query` (`warn`, 500 ms by default) for knex and Strapi
+  (`strapi.db.connection`), with `db_operation`, `db_table`, `duration_ms`, `db_rows`. Never logs
+  SQL text or bindings. `logErrors: true` adds a `db.error` line per failed query, except 25P02
+  ("current transaction is aborted"), which only repeats an earlier failure.
+- `isClientDisconnect(err)` and `stripSql(message)` are exported.
+
+Fixed:
+- `REDACT_PATTERNS.phoneVN` matched inside hex ids: a UUID segment such as `0912345678e0` became
+  `[REDACTED]e0`, also in `request_id`, which broke tracing that request. A letter next to the
+  digits now rules a match out.
+- `request_id`, `trace_id`, `span_id` and `*_request_id` are never passed through value
+  redaction when they are plain tokens.
+- Postgres errors from knex: `err_message` was the whole statement followed by the server's
+  reason, and truncation at 1000 characters cut the reason off. A SQLSTATE error now keeps only
+  the reason and adds `db_table` and `db_constraint`. `err_type` is `DatabaseError` instead of pg's
+  lowercase `error`.
+
+Changed:
+- An `http.request` line whose recorded error is a client disconnect (`aborted`, `ECONNRESET`...)
+  is `warn` with `client_disconnect: true`, even when the app answered 500.
+
 ## 0.5.1
 
 Changed:

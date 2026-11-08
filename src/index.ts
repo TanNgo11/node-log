@@ -2,7 +2,8 @@ export { createLogger, type Logger, type LoggerOptions } from "./logger";
 export { LEVELS, type Level } from "./levels";
 export type { Fields, RedactHook } from "./normalize";
 export { REDACT_PATTERNS, type KeyPattern } from "./redact";
-export { serializeError } from "./error";
+export { isClientDisconnect, serializeError, stripSql } from "./error";
+export { knexLogging, type KnexLike, type KnexLogOptions } from "./knex";
 export { addContext, getContext, recordError, withContext } from "./context";
 export {
   DEFAULT_SKIP_PATHS,

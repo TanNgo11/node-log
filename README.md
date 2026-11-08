@@ -346,6 +346,23 @@ export const prisma = new PrismaClient().$extends(prismaLogging(log, { db_system
   `http.request` line with `err_code` (`P2002`...), and the contract logs each error once. Pass
   `logErrors: true` to also get a `db.error` line.
 
+## knex and Strapi queries
+
+```ts
+import { knexLogging } from "@tanngo11/log";
+
+// Strapi: in bootstrap() of src/index.ts
+knexLogging(strapi.db.connection, log, { db_system: "postgres" });
+```
+
+- Logs `db.slow_query` (`warn`) for queries that take 500 ms or more (`slowMs`). Fields:
+  `db_operation`, `db_table`, `duration_ms`, `db_rows`. Never logs SQL text or bindings.
+- `logErrors: true` also writes `db.error` for each failed query. Use it when the app catches
+  errors inside transactions: Postgres then fails every later query with 25P02, and only the
+  `db.error` line names the query that failed first. 25P02 lines are skipped.
+- Postgres errors keep only the server's reason in `err_message` (knex prefixes the statement)
+  and carry `db_table` and `db_constraint`.
+
 ## Migrating from the shared winston logger
 
 For repos using the old shared winston logger (S3 transport, nested metadata):
