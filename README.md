@@ -359,7 +359,8 @@ knexLogging(strapi.db.connection, log, { db_system: "postgres" });
   `db_operation`, `db_table`, `duration_ms`, `db_rows`. Never logs SQL text or bindings.
 - `logErrors: true` also writes `db.error` for each failed query. Use it when the app catches
   errors inside transactions: Postgres then fails every later query with 25P02, and only the
-  `db.error` line names the query that failed first. 25P02 lines are skipped.
+  `db.error` line names the query that failed first. 25P02 lines are skipped. `db.error` is
+  `warn` by default (`errorLevel`); `ignoreCodes` skips expected codes such as `23505`.
 - Postgres errors keep only the server's reason in `err_message` (knex prefixes the statement)
   and carry `db_table` and `db_constraint`.
 

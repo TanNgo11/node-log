@@ -140,12 +140,19 @@ describe("knexLogging", () => {
     knex.emit("query-error", Object.assign(new Error("aborted tx"), { code: "25P02" }), data);
     expect(lines()).toHaveLength(1);
     expect(lines()[0]).toMatchObject({
-      level: "error",
+      level: "warn",
       event: "db.error",
       db_operation: "update",
       db_table: "properties",
       err_code: "40P01",
       err_message: "deadlock detected",
     });
+  });
+
+  it("honours errorLevel and ignoreCodes", () => {
+    const { knex, lines } = setup({ logErrors: true, errorLevel: "error", ignoreCodes: ["23505"] });
+    knex.emit("query-error", Object.assign(new Error("dup"), { code: "23505" }), { __knexQueryUid: "a" });
+    knex.emit("query-error", Object.assign(new Error("deadlock detected"), { code: "40P01" }), { __knexQueryUid: "b" });
+    expect(lines().map((l) => [l.level, l.err_code])).toEqual([["error", "40P01"]]);
   });
 });

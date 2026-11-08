@@ -10,6 +10,14 @@ export interface KnexLogOptions {
    * only this line shows the query that failed first. 25P02 itself is never logged here.
    */
   logErrors?: boolean;
+  /**
+   * Level of db.error lines. Default "warn": apps catch some errors on purpose (a unique
+   * violation that means "already exists"), and a failure that matters already makes the
+   * request's http.request line an error.
+   */
+  errorLevel?: "warn" | "error";
+  /** SQLSTATE codes never logged as db.error, in addition to 25P02. */
+  ignoreCodes?: readonly string[];
   /** Value for db_system, e.g. "postgres". */
   db_system?: string;
   now?: () => number;
@@ -85,8 +93,9 @@ export function knexLogging(knex: KnexLike, log: Logger, opts: KnexLogOptions = 
   knex.on("query-error", (err: unknown, data: QueryData) => {
     const duration = finish(data);
     if (!opts.logErrors) return;
-    if ((err as { code?: unknown } | null)?.code === "25P02") return;
+    const code = (err as { code?: unknown } | null)?.code;
+    if (code === "25P02" || (typeof code === "string" && opts.ignoreCodes?.includes(code))) return;
     // err_message drops the statement knex prefixed (see stripSql in serializeError).
-    log.error("database error", { ...base(data ?? {}, duration), event: "db.error", err });
+    log[opts.errorLevel ?? "warn"]("database error", { ...base(data ?? {}, duration), event: "db.error", err });
   });
 }

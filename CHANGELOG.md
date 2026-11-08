@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1
+
+Changed:
+- `knexLogging` writes `db.error` at `warn` by default (option `errorLevel`): apps catch some
+  errors on purpose, such as a unique violation that means "already exists". `ignoreCodes` skips
+  more SQLSTATE codes besides 25P02.
+
 ## 0.6.0
 
 Added:
