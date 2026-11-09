@@ -13,6 +13,12 @@ describe("phoneVN boundaries", () => {
     expect(lines()[0]!.message).toBe("goi [REDACTED], [REDACTED] hoac ([REDACTED]).");
   });
 
+  it("masks a number glued to a non-hex label", () => {
+    const { log, lines } = capture({ redactValues: [REDACT_PATTERNS.phoneVN] });
+    log.info("SDT0912345678 / phone_0388888888");
+    expect(lines()[0]!.message).toBe("SDT[REDACTED] / phone_[REDACTED]");
+  });
+
   it("leaves a hex id segment alone", () => {
     const { log, lines } = capture({ redactValues: [REDACT_PATTERNS.phoneVN] });
     const id = "d1a9162b-f872-4266-98b4-0912345678e0";
@@ -66,9 +72,33 @@ describe("database errors", () => {
     expect(stripSql("select 1 - deadlock detected")).toBe("deadlock detected");
   });
 
-  it("does not touch non-SQLSTATE codes", () => {
+  it("does not touch non-SQL messages with other codes", () => {
     const e = Object.assign(new Error("select failed - x"), { code: "ECONNREFUSED" });
     expect(serializeError(e).err_message).toBe("select failed - x");
+    expect(serializeError(new Error("Update failed - retry later")).err_message).toBe("Update failed - retry later");
+  });
+
+  it("drops the statement from the stack too", () => {
+    // knex rewrites the message before anyone reads .stack, so V8 renders the statement into it.
+    const e = new DatabaseError("placeholder");
+    e.message = `insert into "up_users" ("email","password") values ($1, $2) - duplicate key value violates unique constraint`;
+    const out = serializeError(e);
+    expect(out.err_message).toBe("duplicate key value violates unique constraint");
+    expect(out.err_stack).not.toContain("insert into");
+  });
+
+  it("drops the statement for errors without a SQLSTATE and for other drivers", () => {
+    const terminated = new Error(`select "id" from "properties" where "slug" = $1 - Connection terminated unexpectedly`);
+    expect(serializeError(terminated).err_message).toBe("Connection terminated unexpectedly");
+    const mysql = Object.assign(new Error("insert into `users` (`email`) values ('a@b.c') - ER_DUP_ENTRY: Duplicate entry"), { code: "ER_DUP_ENTRY" });
+    expect(serializeError(mysql).err_message).toBe("ER_DUP_ENTRY: Duplicate entry");
+    expect(stripSql("/* q */ (select 1) union (select 2) - syntax error")).toBe("syntax error");
+  });
+
+  it("drops the statement from a cause", () => {
+    const cause = Object.assign(new Error(`update "properties" set "title" = $1 - deadlock detected`), { code: "40P01" });
+    const out = serializeError(new Error("save failed", { cause }));
+    expect(out.err_cause).toBe("Error: deadlock detected");
   });
 });
 

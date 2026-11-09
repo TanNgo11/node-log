@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.3
+
+Fixed:
+- `err_stack` of a failed knex query repeated the statement: knex rewrites the message before the
+  stack is first read, so V8 renders the statement into the stack's first line. The statement is
+  now removed from `err_stack` and `err_cause` as well as `err_message`.
+- The statement is removed whatever the error code: pg errors without a SQLSTATE ("Connection
+  terminated unexpectedly"), MySQL `ER_*` and SQLite errors, and statements behind a comment or an
+  opening parenthesis. Without a SQLSTATE the prefix must read like SQL, so "Update failed - retry"
+  stays whole.
+- `REDACT_PATTERNS.phoneVN` again masks a number glued to a label such as `SDT0912345678`; only a
+  hex letter (a-f) next to the number rules a match out (0.6.0 ruled out any letter).
+
 ## 0.6.2
 
 Fixed:

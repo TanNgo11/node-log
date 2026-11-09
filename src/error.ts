@@ -37,20 +37,23 @@ export function serializeError(err: unknown): ErrFields {
     return { err_type: typeof err, err_message: defaultRedactor.json(err) };
   }
   const e = err as Error & { code?: unknown; cause?: unknown; table?: unknown; constraint?: unknown };
-  const out: ErrFields = { err_type: errorType(e), err_message: String(e.message ?? "") };
+  const message = String(e.message ?? "");
+  const out: ErrFields = { err_type: errorType(e), err_message: message };
   if (e.code !== undefined && e.code !== null) out.err_code = String(e.code);
+  out.err_message = cleanMessage(message, out.err_code);
   if (isSqlState(out.err_code)) {
-    out.err_message = stripSql(out.err_message ?? "");
     if (typeof e.table === "string" && e.table) out.db_table = e.table;
     if (typeof e.constraint === "string" && e.constraint) out.db_constraint = e.constraint;
   }
-  if (typeof e.stack === "string") out.err_stack = e.stack;
+  if (typeof e.stack === "string") out.err_stack = replaceOnce(e.stack, message, out.err_message);
 
   const causes: string[] = [];
   let cause = e.cause;
   while (cause !== undefined && cause !== null && causes.length < MAX_CAUSE_DEPTH) {
     if (isErrorLike(cause)) {
-      causes.push(`${errorType(cause)}: ${cause.message}`);
+      const code = (cause as { code?: unknown }).code;
+      const causeCode = code === undefined || code === null ? undefined : String(code);
+      causes.push(`${errorType(cause)}: ${cleanMessage(String(cause.message ?? ""), causeCode)}`);
       cause = (cause as { cause?: unknown }).cause;
     } else {
       causes.push(defaultRedactor.json(cause));
@@ -66,12 +69,37 @@ function isSqlState(code: string | undefined): boolean {
   return code !== undefined && /^[0-9A-Z]{5}$/.test(code);
 }
 
-const SQL_START_RE = /^\s*(?:select|insert|update|delete|with|create|alter|drop|truncate|lock)\b/i;
+// A statement, optionally behind comments or opening parentheses ("(select ...) union ...").
+const SQL_START_RE = /^\s*(?:\/\*[\s\S]*?\*\/\s*)*\(*\s*(?:select|insert|update|delete|with|create|alter|drop|truncate|lock)\b/i;
+// Without a SQLSTATE code, the part before " - " must also read like SQL, so a message such as
+// "Update failed - retry later" stays whole.
+const SQL_BODY_RE = /["`]|\b(?:from|into|set|values|where|table|returning)\b/i;
+
+/**
+ * knex prefixes every failed query's message with the statement, whatever the driver or error
+ * (pg with or without a SQLSTATE, MySQL ER_*, SQLite, "Connection terminated"). Drops it.
+ */
+function cleanMessage(message: string, code: string | undefined): string {
+  const at = message.lastIndexOf(" - ");
+  if (at === -1 || !SQL_START_RE.test(message)) return message;
+  if (!isSqlState(code) && !SQL_BODY_RE.test(message.slice(0, at))) return message;
+  return stripSql(message);
+}
+
+// V8 renders the stack's first line from the message when .stack is first read. For knex errors
+// that is after the statement was prefixed, so the stack repeats it.
+function replaceOnce(text: string, find: string, replacement: string | undefined): string {
+  if (replacement === undefined || find === replacement || find === "") return text;
+  const at = text.indexOf(find);
+  return at === -1 ? text : text.slice(0, at) + replacement + text.slice(at + find.length);
+}
 
 /**
  * knex prefixes a failed query's message with the whole statement ("update ... - deadlock
  * detected"). A long statement filled err_message and the truncation cut off the server's reason,
- * the only part worth reading. Keeps the reason; the statement never reaches the log.
+ * the only part worth reading. Keeps the reason; the statement never reaches the log. Cuts at the
+ * last " - ": a reason that contains " - " loses its start, which is safer than keeping part of a
+ * statement that contains one (arithmetic, string literals).
  */
 export function stripSql(message: string): string {
   if (!SQL_START_RE.test(message)) return message;
