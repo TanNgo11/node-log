@@ -212,6 +212,17 @@ describe("strapiServerErrors", () => {
       },
     ]);
   });
+  it("keeps Koa's default printer quiet even when it is attached", () => {
+    const cap = capture();
+    const app = new Koa();
+    strapiServerErrors(app, cap.log);
+    app.on("error", app.onerror.bind(app));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    app.emit("error", Object.assign(new Error("write ECONNRESET"), { code: "ECONNRESET" }));
+    consoleError.mockRestore();
+    expect(consoleError).not.toHaveBeenCalled();
+    expect(cap.lines()).toMatchObject([{ level: "warn", event: "http.server_error", client_disconnect: true }]);
+  });
   it("logs server-side errors at error and skips exposed client errors", () => {
     const cap = capture();
     const app = new Koa();

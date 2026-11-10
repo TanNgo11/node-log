@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.4
+
+Fixed:
+- `strapiServerErrors` sets `app.silent`. A Strapi 5 production app still had Koa's default
+  printer attached next to the library's listener, so each stream error (`write ECONNRESET`,
+  `Parse Error`) was also written as plain stderr lines, one per stack frame, the first at `error`
+  even for a client disconnect.
+
 ## 0.6.3
 
 Fixed:

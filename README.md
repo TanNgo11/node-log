@@ -325,7 +325,8 @@ register({ strapi }) {
   repeats its deprecation on every query) is written at most once an hour (`repeatWindowMs`);
   the next line's `suppressed_count` says how many repeats were dropped since the previous one.
   Pass `{ replaceDefault: false }` to keep Node's printer.
-- `strapiServerErrors` replaces Koa's default error printer. Koa prints errors that never reach a
+- `strapiServerErrors` replaces Koa's default error printer and sets `app.silent`, so the printer
+  stays quiet even when Koa attached it anyway (seen on a Strapi 5 production app). Koa prints errors that never reach a
   middleware (a client that hung up mid-upload, an HTTP parse error) with `console.error`, which
   becomes one plain stderr line per stack frame. They become one `http.server_error` line with
   `err_stack`, `http_method`, `http_path` and `request_id`. Client disconnects (`aborted`,

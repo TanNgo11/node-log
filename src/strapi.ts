@@ -108,17 +108,23 @@ export function strapiErrorCapture(): KoaMiddleware {
 /** The part of a Koa application (strapi.server.app) strapiServerErrors uses. */
 export interface KoaAppLike {
   on(event: "error", listener: (err: unknown, ctx?: KoaContextLike) => void): unknown;
+  /** Koa's own printer returns early when set. */
+  silent?: boolean;
 }
 
 /**
  * Replaces Koa's default app.onerror, which prints the stack with console.error as many plain
  * stderr lines (stream errors such as "aborted" or "Parse Error" that never reach a middleware).
- * Writes one `http.server_error` line instead. Call it in register() of src/index.ts, before the
+ * Writes one `http.server_error` line instead and sets `app.silent` so the default printer stays
+ * quiet even if it is attached. Call it in register() of src/index.ts, before the
  * first request: `strapiServerErrors(strapi.server.app, log)`.
  */
 export function strapiServerErrors(app: KoaAppLike, log: Logger, opts: { stateKey?: string } = {}): void {
   const stateKey = opts.stateKey ?? "requestId";
-  // Koa installs its printer only when the app has no error listener of its own.
+  // Koa installs its printer only when the app has no error listener at callback() time, but a
+  // Strapi 5 production app still printed both copies. `silent` turns the printer off however and
+  // whenever it was attached; nothing else in Koa 2 reads it.
+  app.silent = true;
   app.on("error", (err, ctx) => {
     if (isLogged(err)) return;
     const e = err as { status?: unknown; expose?: unknown } | null;
